@@ -1,0 +1,25 @@
+{
+  "name": "echocode-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mints short-lived Gemini Live tokens for the EchoCode VS Code extension.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke-live.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^2.24.0",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}

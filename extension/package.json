@@ -1,0 +1,124 @@
+{
+  "name": "echocode",
+  "displayName": "EchoCode",
+  "description": "Voice-first AI pair programmer: select code, press a hotkey and ask out loud.",
+  "version": "0.1.0",
+  "publisher": "echocode-hackathon",
+  "private": true,
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Education",
+    "Other"
+  ],
+  "keywords": [
+    "voice",
+    "gemini",
+    "pair programming",
+    "tutor"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "echocode",
+          "title": "EchoCode",
+          "icon": "media/robot.svg"
+        }
+      ]
+    },
+    "views": {
+      "echocode": [
+        {
+          "type": "webview",
+          "id": "echocode.assistant",
+          "name": "Assistant"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "echocode.talk",
+        "title": "Talk / Send Question",
+        "category": "EchoCode",
+        "icon": "$(mic)"
+      },
+      {
+        "command": "echocode.stop",
+        "title": "Stop",
+        "category": "EchoCode",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "echocode.testMicrophone",
+        "title": "Test Microphone",
+        "category": "EchoCode"
+      },
+      {
+        "command": "echocode.selectMicrophone",
+        "title": "Choose Microphone",
+        "category": "EchoCode"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "echocode.talk",
+        "key": "ctrl+alt+space",
+        "mac": "ctrl+shift+space"
+      }
+    ],
+    "configuration": {
+      "title": "EchoCode",
+      "properties": {
+        "echocode.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "Base URL of the EchoCode backend that issues Gemini Live session tokens."
+        },
+        "echocode.micDeviceIndex": {
+          "type": "integer",
+          "default": -1,
+          "minimum": -1,
+          "description": "Microphone to record from. -1 uses the system default; run \"EchoCode: Choose Microphone\" to pick one."
+        },
+        "echocode.maxContextLines": {
+          "type": "integer",
+          "default": 400,
+          "minimum": 20,
+          "maximum": 5000,
+          "description": "Maximum number of lines of the current file sent with each question, centred on your cursor or selection."
+        },
+        "echocode.autoStopSilenceMs": {
+          "type": "integer",
+          "default": 2000,
+          "minimum": 0,
+          "description": "Send your question automatically after this many milliseconds of silence. 0 means only the hotkey sends it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc -p . && tsc -p webview",
+    "test": "node --test test/*.test.ts",
+    "package": "node esbuild.mjs --production && vsce package"
+  },
+  "dependencies": {
+    "@picovoice/pvrecorder-node": "^1.2.9"
+  },
+  "devDependencies": {
+    "@google/genai": "^2.24.0",
+    "@types/node": "^22.20.4",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3"
+  }
+}

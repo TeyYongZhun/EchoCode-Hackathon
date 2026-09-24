@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output
+extension/dist/
+*.vsix
+backend/.next/
+backend/next-env.d.ts
+*.tsbuildinfo
+
+# Secrets
+.env
+.env*.local
+.vercel
+
+# OS / logs
+.DS_Store
+Thumbs.db
+*.log
