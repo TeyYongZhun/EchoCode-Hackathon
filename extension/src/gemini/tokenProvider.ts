@@ -35,7 +35,12 @@ export async function fetchSessionTicket(backendUrl: string, installId: string):
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
-    throw new Error(`Can't reach the EchoCode backend at ${base}. Is it running?`);
+    const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(base);
+    throw new Error(
+      isLocal
+        ? `Can't reach the EchoCode backend at ${base}. Start it with "npm run dev" in the backend folder.`
+        : `Can't reach the EchoCode backend at ${base}. Check your connection or the echocode.backendUrl setting.`,
+    );
   }
 
   const body: unknown = await response.json().catch(() => undefined);

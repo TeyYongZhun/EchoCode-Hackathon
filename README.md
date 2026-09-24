@@ -168,13 +168,19 @@ cd extension
 npm install
 ```
 
-Open the repository folder in VS Code and press **F5**. A second VS Code window, the Extension Development Host, opens on the `demo/` folder with EchoCode loaded.
+```bash
+npm run dev
+```
+
+This builds EchoCode, starts the backend if it isn't already running, and opens a VS Code window on the `demo/` folder with the extension loaded. Keep the terminal open: it shows the backend's logs, and **Ctrl+C** stops it. (**Run EchoCode** from the Run and Debug view opens the same window with the debugger attached, but doesn't start the backend.)
 
 **3. Talk to it.**
 
 1. In the new window, run **EchoCode: Test Microphone** from the Command Palette. If it reports silence, run **EchoCode: Choose Microphone**.
-2. Open `GenericStack.java`, select the `push` method, press **Ctrl+Alt+Space** and ask *"Walk me through this method."*
-3. Press **Ctrl+Alt+Space** again, or just stop talking for two seconds. The answer plays through the EchoCode panel at the bottom of the window.
+2. Open `GenericStack.java`, select the `push` method and ask *"Walk me through this method."* To talk, either:
+   - **hold** Ctrl+Alt+Space while you speak and let go to send, or
+   - **tap** Ctrl+Alt+Space (or click **EchoCode** in the status bar), speak, then tap again or pause for two seconds.
+3. The answer plays through the EchoCode panel at the bottom of the window, with the transcript alongside.
 
 The **EchoCode** output channel logs every step, including connection time and the latency of each answer.
 

@@ -6,6 +6,7 @@ import { readSettings } from './config';
 import { captureEditorContext, type EditorTracker } from './context/editorContext';
 import { LiveClient } from './gemini/LiveClient';
 import { fetchSessionTicket } from './gemini/tokenProvider';
+import { HotkeyPresses } from './hotkeyPresses';
 import type { SessionState } from './protocol';
 import type { AssistantViewProvider } from './ui/AssistantViewProvider';
 
@@ -14,6 +15,9 @@ const OUTPUT_SAMPLE_RATE = 24000;
 const MAX_QUESTION_MS = 60_000;
 /** Small margin after the last audio chunk before returning to idle. */
 const PLAYBACK_TAIL_MS = 200;
+/** Audio kept from just before speech starts (about half a second), so the first word isn't clipped. */
+const PRE_ROLL_FRAMES = 16;
+const NOTHING_HEARD = "I didn't hear anything. Try again, a little closer to the microphone.";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -26,24 +30,36 @@ function errorMessage(err: unknown): string {
  *   idle ─talk─► connecting ─► listening ─talk/silence─► thinking ─audio─► speaking ─done─► idle
  *                                  ▲                                          │
  *                                  └───────────── talk (barge in) ────────────┘
+ *
+ * Gemini only hears about a question once the user actually speaks. It rejects
+ * a question with no audio ("Precondition check failed") and answers silence
+ * with nonsense, so a turn with no speech is cancelled locally.
  */
 export class SessionController implements vscode.Disposable {
   private state: SessionState = 'idle';
   private readonly live: LiveClient;
   private readonly mic = new MicRecorder();
+  private readonly presses = new HotkeyPresses();
+  private holding = false;
+  private releaseTimer: NodeJS.Timeout | undefined;
 
   /** Increments on every new turn and on stop, so stale async work can tell it's stale. */
   private turnId = 0;
   private userText = '';
   private modelText = '';
-  /** Mic audio captured while the session was still connecting. */
+  /** Editor context captured when this turn started. */
+  private turnContext = '';
+  /** The editor context Gemini already has, so it's only resent when it changes. */
+  private lastContext: string | undefined;
+  /** Mic audio not yet sent: captured while connecting or before speech began. */
   private pendingAudio: string[] = [];
-  private streaming = false;
+  /** The Live session is open and ready for this turn's audio. */
+  private sessionReady = false;
+  /** Gemini has been told a question started (activityStart sent). */
+  private activityOpen = false;
   private finishRequested = false;
   private silence = new SilenceDetector(FRAME_MS, 0);
   private frameCount = 0;
-  /** The editor context Gemini already has, so it's only resent when it changes. */
-  private lastContext: string | undefined;
   private endOfSpeechAt = 0;
   private sawAudio = false;
   private playbackEndsAt = 0;
@@ -55,6 +71,9 @@ export class SessionController implements vscode.Disposable {
   private readonly log: vscode.LogOutputChannel;
   private readonly installId: string;
   private readonly subscription: vscode.Disposable;
+  private readonly stateChanged = new vscode.EventEmitter<SessionState>();
+
+  readonly onDidChangeState = this.stateChanged.event;
 
   constructor(view: AssistantViewProvider, editors: EditorTracker, log: vscode.LogOutputChannel, installId: string) {
     this.view = view;
@@ -83,31 +102,35 @@ export class SessionController implements vscode.Disposable {
     return this.state;
   }
 
-  /** The hotkey: start a question, send it, or interrupt the answer with a new one. */
+  /**
+   * The hotkey, status bar robot and panel button all land here. Tap to start
+   * and tap to send, or hold the hotkey while talking and let go to send.
+   */
   async toggleTalk(): Promise<void> {
-    switch (this.state) {
-      case 'idle':
-        return this.startTurn();
-      case 'connecting':
-      case 'listening':
-        // Until audio is streaming, the question can't be closed yet.
-        return this.streaming ? this.finishSpeaking() : this.requestFinish();
-      case 'thinking':
-      case 'speaking':
-        return this.bargeIn();
+    const press = this.presses.press(Date.now());
+    if (press.kind === 'ignored') return;
+    if (press.kind === 'held') {
+      if (!this.holding) this.log.info('Hotkey held: release it to send the question');
+      this.holding = true;
+      clearTimeout(this.releaseTimer);
+      this.releaseTimer = setTimeout(() => this.onHotkeyReleased(), press.releaseAfterMs);
+      return;
     }
+    this.log.info(`Talk pressed (state: ${this.state})`);
+    await this.guarded(() => this.handleTalk());
   }
 
   /** Cancels whatever is happening and goes quiet. */
   async stop(): Promise<void> {
-    const wasStreaming = this.streaming;
+    const hadActivity = this.activityOpen;
     this.turnId++;
     this.clearTimers();
     this.setState('idle');
-    this.streaming = false;
+    this.activityOpen = false;
+    this.sessionReady = false;
     await this.mic.stop();
     // Close the open question; the reply is ignored because we're idle.
-    if (wasStreaming) this.live.endActivity();
+    if (hadActivity) this.live.endActivity();
     this.view.post({ type: 'flushAudio' });
   }
 
@@ -116,24 +139,58 @@ export class SessionController implements vscode.Disposable {
     void this.mic.stop();
     this.live.close();
     this.subscription.dispose();
+    this.stateChanged.dispose();
+  }
+
+  private async handleTalk(): Promise<void> {
+    switch (this.state) {
+      case 'idle':
+        return this.startTurn();
+      case 'connecting':
+      case 'listening':
+        return this.sessionReady ? this.finishSpeaking() : this.requestFinish();
+      case 'thinking':
+      case 'speaking':
+        return this.bargeIn();
+    }
+  }
+
+  private onHotkeyReleased(): void {
+    this.holding = false;
+    if (this.state !== 'listening' && this.state !== 'connecting') return;
+    this.log.info('Hotkey released: sending the question');
+    void this.guarded(() => this.handleTalk());
+  }
+
+  private async guarded(action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+    } catch (err) {
+      this.fail(`Something went wrong: ${errorMessage(err)}`);
+    }
   }
 
   private async startTurn(): Promise<void> {
     const settings = readSettings();
     const editor = this.editors.editor;
-    const context = captureEditorContext(editor, settings.maxContextLines);
     const turn = ++this.turnId;
+    this.turnContext = captureEditorContext(editor, settings.maxContextLines);
     this.userText = '';
     this.modelText = '';
     this.pendingAudio = [];
-    this.streaming = false;
+    this.sessionReady = false;
+    this.activityOpen = false;
     this.finishRequested = false;
     this.frameCount = 0;
     this.silence = new SilenceDetector(FRAME_MS, settings.autoStopSilenceMs);
     this.setState(this.live.isOpen ? 'listening' : 'connecting');
     void this.view.ensureVisible(editor);
 
-    // Start recording straight away so nothing said while connecting is lost.
+    // A previous recording may still be winding down.
+    await this.mic.stop();
+    if (turn !== this.turnId) return;
+
+    // Record straight away so nothing said while connecting is lost.
     try {
       const device = await this.mic.start(
         settings.micDeviceIndex,
@@ -142,7 +199,7 @@ export class SessionController implements vscode.Disposable {
       );
       this.log.info(`Turn ${turn}: recording from "${device}"`);
     } catch (err) {
-      this.fail(`Couldn't open the microphone: ${errorMessage(err)}`);
+      if (turn === this.turnId) this.fail(`Couldn't open the microphone: ${errorMessage(err)}`);
       return;
     }
     if (turn !== this.turnId) return void this.mic.stop();
@@ -161,23 +218,30 @@ export class SessionController implements vscode.Disposable {
       if (turn !== this.turnId) return;
     }
 
-    if (context !== this.lastContext) {
-      this.live.sendContext(context);
-      this.lastContext = context;
-    }
-    this.live.startActivity();
-    for (const chunk of this.pendingAudio) this.live.sendAudio(chunk);
-    this.pendingAudio = [];
-    this.streaming = true;
+    this.sessionReady = true;
     this.setState('listening');
+    this.openActivityIfSpeaking();
     if (this.finishRequested) {
       await this.finishSpeaking();
       return;
     }
-    this.questionTimer = setTimeout(() => void this.finishSpeaking(), MAX_QUESTION_MS);
+    this.questionTimer = setTimeout(() => void this.guarded(() => this.finishSpeaking()), MAX_QUESTION_MS);
   }
 
-  /** The user finished talking before the session was ready; send as soon as it is. */
+  /** Tells Gemini a question has started, once the session is ready and the user is speaking. */
+  private openActivityIfSpeaking(): void {
+    if (!this.sessionReady || this.activityOpen || !this.silence.speechDetected) return;
+    if (this.turnContext !== this.lastContext) {
+      this.live.sendContext(this.turnContext);
+      this.lastContext = this.turnContext;
+    }
+    this.live.startActivity();
+    for (const chunk of this.pendingAudio) this.live.sendAudio(chunk);
+    this.pendingAudio = [];
+    this.activityOpen = true;
+  }
+
+  /** The user finished before the session was ready; send as soon as it is. */
   private async requestFinish(): Promise<void> {
     if (this.finishRequested) return;
     this.finishRequested = true;
@@ -185,16 +249,24 @@ export class SessionController implements vscode.Disposable {
   }
 
   private async finishSpeaking(): Promise<void> {
-    if (this.state !== 'listening' || !this.streaming) return;
+    if (this.state !== 'listening' || !this.sessionReady) return;
     clearTimeout(this.questionTimer);
     this.setState('thinking');
     await this.mic.stop();
-    this.streaming = false;
+    this.openActivityIfSpeaking();
+
+    if (!this.activityOpen) {
+      this.log.warn('No speech detected, so nothing was sent to Gemini.');
+      this.pendingAudio = [];
+      this.setState('idle');
+      this.view.post({ type: 'error', message: NOTHING_HEARD });
+      return;
+    }
     this.live.endActivity();
+    this.activityOpen = false;
     this.endOfSpeechAt = Date.now();
     this.sawAudio = false;
     this.playbackEndsAt = 0;
-    if (!this.silence.speechDetected) this.log.warn('Question sent, but no speech was detected.');
   }
 
   private async bargeIn(): Promise<void> {
@@ -210,12 +282,18 @@ export class SessionController implements vscode.Disposable {
     if (++this.frameCount % 2 === 0) this.view.post({ type: 'micLevel', level });
 
     const chunk = pcm16ToBase64(pcm);
-    if (this.streaming) this.live.sendAudio(chunk);
-    else this.pendingAudio.push(chunk);
+    if (this.activityOpen) {
+      this.live.sendAudio(chunk);
+    } else {
+      this.pendingAudio.push(chunk);
+      // Before anyone speaks, only a short pre-roll is worth keeping.
+      if (!this.silence.speechDetected && this.pendingAudio.length > PRE_ROLL_FRAMES) this.pendingAudio.shift();
+    }
 
-    if (this.silence.push(level)) {
-      if (this.streaming) void this.finishSpeaking();
-      else if (this.state === 'connecting' || this.state === 'listening') void this.requestFinish();
+    const ended = this.silence.push(level);
+    this.openActivityIfSpeaking();
+    if (ended && (this.state === 'listening' || this.state === 'connecting')) {
+      void this.guarded(() => (this.sessionReady ? this.finishSpeaking() : this.requestFinish()));
     }
   }
 
@@ -260,6 +338,8 @@ export class SessionController implements vscode.Disposable {
 
   private onSessionClosed(reason: string): void {
     this.lastContext = undefined;
+    this.sessionReady = false;
+    this.activityOpen = false;
     if (this.state === 'listening' || this.state === 'thinking') {
       this.fail(`Gemini ended the session (${reason}). Press the hotkey to start again.`);
     }
@@ -269,7 +349,8 @@ export class SessionController implements vscode.Disposable {
     this.log.error(message);
     this.turnId++;
     this.clearTimers();
-    this.streaming = false;
+    this.sessionReady = false;
+    this.activityOpen = false;
     void this.mic.stop();
     this.setState('idle');
     this.view.post({ type: 'error', message });
@@ -280,6 +361,7 @@ export class SessionController implements vscode.Disposable {
     if (this.state === state) return;
     this.state = state;
     this.view.post({ type: 'state', state });
+    this.stateChanged.fire(state);
     void vscode.commands.executeCommand('setContext', 'echocode.state', state);
   }
 
