@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build EchoCode extension",
+      "type": "npm",
+      "script": "build",
+      "path": "extension",
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Run EchoCode backend",
+      "type": "npm",
+      "script": "dev",
+      "path": "backend",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

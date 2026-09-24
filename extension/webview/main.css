@@ -1,0 +1,161 @@
+/* Day 1 panel: functional, theme-aware. The Tron-style robot UI replaces this on Day 2. */
+:root {
+  --accent: #00d8e8;
+  --speaking: #e040fb;
+  --listening: #00e676;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-panel-background, var(--vscode-editor-background));
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: calc(100vh - 16px);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground);
+}
+
+.state[data-state='connecting'] .dot,
+.state[data-state='thinking'] .dot {
+  background: var(--accent);
+  animation: blink 0.8s infinite alternate;
+}
+
+.state[data-state='listening'] .dot {
+  background: var(--listening);
+}
+
+.state[data-state='speaking'] .dot {
+  background: var(--speaking);
+}
+
+@keyframes blink {
+  to {
+    opacity: 0.3;
+  }
+}
+
+.meter {
+  width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--vscode-input-background);
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+.latency {
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground);
+}
+
+button {
+  padding: 3px 12px;
+  border: none;
+  border-radius: 2px;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+button.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+
+.notice,
+.error {
+  padding: 6px 8px;
+  border-radius: 3px;
+  border-left: 3px solid var(--vscode-editorWarning-foreground);
+  background: var(--vscode-inputValidation-warningBackground);
+}
+
+.error {
+  border-left-color: var(--vscode-editorError-foreground);
+  background: var(--vscode-inputValidation-errorBackground);
+}
+
+.log {
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.log li {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  line-height: 1.45;
+}
+
+.log .who {
+  flex: none;
+  width: 72px;
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+
+.log .model .who {
+  color: var(--accent);
+}
+
+.log .empty {
+  color: var(--vscode-descriptionForeground);
+}
+
+kbd {
+  padding: 0 4px;
+  border: 1px solid var(--vscode-widget-border, #555);
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family);
+}

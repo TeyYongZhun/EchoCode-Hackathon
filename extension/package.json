@@ -107,7 +107,7 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p . && tsc -p webview",
-    "test": "node --test test/*.test.ts",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/*.test.ts",
     "package": "node esbuild.mjs --production && vsce package"
   },
   "dependencies": {
@@ -116,7 +116,7 @@
   "devDependencies": {
     "@google/genai": "^2.24.0",
     "@types/node": "^22.20.4",
-    "@types/vscode": "^1.95.0",
+    "@types/vscode": "1.95.0",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
     "typescript": "^5.9.3"

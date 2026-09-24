@@ -18,24 +18,14 @@ if (!response.ok) {
 }
 console.log(`Token OK for model ${ticket.model} (API ${ticket.apiVersion}).`);
 
-const ai = new GoogleGenAI({ apiKey: ticket.token, httpOptions: { apiVersion: ticket.apiVersion } });
+const { promise: done, resolve: finish, reject: fail } = Promise.withResolvers();
+const timer = setTimeout(() => fail(new Error('No complete reply within 30 seconds.')), 30_000);
 let audioBytes = 0;
 let transcript = '';
 let firstAudioMs;
 let sentAt;
 
-const done = new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error('No complete reply within 30 seconds.')), 30_000);
-  globalThis.finish = () => {
-    clearTimeout(timer);
-    resolve();
-  };
-  globalThis.fail = (err) => {
-    clearTimeout(timer);
-    reject(err);
-  };
-});
-
+const ai = new GoogleGenAI({ apiKey: ticket.token, httpOptions: { apiVersion: ticket.apiVersion } });
 const session = await ai.live.connect({
   model: ticket.model,
   config: ticket.config,
@@ -49,10 +39,10 @@ const session = await ai.live.connect({
         }
       }
       if (content?.outputTranscription?.text) transcript += content.outputTranscription.text;
-      if (content?.turnComplete) globalThis.finish();
+      if (content?.turnComplete) finish();
     },
-    onerror: (e) => globalThis.fail(new Error(e.message ?? 'WebSocket error')),
-    onclose: (e) => globalThis.fail(new Error(`Session closed: ${e.code} ${e.reason}`)),
+    onerror: (e) => fail(new Error(e.message ?? 'WebSocket error')),
+    onclose: (e) => fail(new Error(`Session closed: ${e.code} ${e.reason}`)),
   },
 });
 console.log('Live session open. Asking a question...');
@@ -65,6 +55,7 @@ session.sendClientContent({
 
 try {
   await done;
+  // 24 kHz, 16-bit mono = 48,000 bytes per second.
   console.log(`First audio after ${firstAudioMs} ms, ${(audioBytes / 48000).toFixed(1)} s of speech.`);
   console.log(`Transcript: ${transcript.trim()}`);
   console.log('Smoke test passed.');
@@ -72,5 +63,6 @@ try {
   console.error('Smoke test failed:', err.message);
   process.exitCode = 1;
 } finally {
+  clearTimeout(timer);
   session.close();
 }

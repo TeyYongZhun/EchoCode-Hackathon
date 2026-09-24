@@ -104,7 +104,7 @@ EchoCode is being built during a 3-day hackathon. Each step lands as its own com
 
 **Day 1: It talks**
 - [x] 0. Project README: pitch, architecture and plan
-- [ ] 1. Scaffold the extension (esbuild) and the backend (Next.js), plus the demo files
+- [x] 1. Scaffold the extension (esbuild) and the backend (Next.js), plus the demo files
 - [ ] 2. `/api/token` creates ephemeral tokens
 - [ ] 3. Microphone check: PvRecorder recording inside VS Code
 - [ ] 4. Voice loop: hotkey, then context and mic audio to Gemini Live, then a spoken answer
@@ -124,21 +124,70 @@ EchoCode is being built during a 3-day hackathon. Each step lands as its own com
 ## Repository layout
 
 ```
-extension/   VS Code extension: hotkey, mic capture, editor context, Gemini Live session, webview UI
-backend/     Next.js app deployed on Vercel: ephemeral token route, session setup, usage quota
-demo/        Java files used in the live demo (generic stack, linked list, duplicate finder)
+extension/
+  src/extension.ts              activation: panel, commands, hotkey
+  src/SessionController.ts      push-to-talk state machine for each question
+  src/audio/                    microphone worker thread, levels, silence detection
+  src/context/                  builds the [EDITOR CONTEXT] block from the active editor
+  src/gemini/                   session token request and the Gemini Live client
+  src/ui/                       webview panel host
+  webview/                      panel UI and 24 kHz audio playback
+  test/                         unit tests (node --test)
+backend/
+  app/api/token/route.ts        mints single-use ephemeral tokens
+  app/api/health/route.ts       status check
+  lib/liveConfig.ts             model, voice, system prompt and session settings
+  scripts/smoke-live.mjs        end-to-end check without VS Code
+demo/                           Java files used in the live demo
 ```
 
 ## Getting started
 
 You'll need:
 
-- Node.js 20 or later
+- Node.js 22.18 or later (24 recommended)
 - VS Code 1.95 or later
 - A microphone, ideally with headphones
 - A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey). The free tier is enough.
 
-Setup commands will be added here as the extension and backend land (steps 1 to 4).
+**1. Start the backend.** It holds your API key and hands out short-lived session tokens.
+
+```bash
+cd backend
+npm install
+cp .env.example .env.local   # then put your key in GEMINI_API_KEY
+npm run dev                  # serves http://localhost:3000
+```
+
+To check the whole path to Gemini without VS Code or a microphone, run `npm run smoke` in a second terminal. It asks Gemini one question and prints the reply and its latency.
+
+**2. Run the extension.**
+
+```bash
+cd extension
+npm install
+```
+
+Open the repository folder in VS Code and press **F5**. A second VS Code window, the Extension Development Host, opens on the `demo/` folder with EchoCode loaded.
+
+**3. Talk to it.**
+
+1. In the new window, run **EchoCode: Test Microphone** from the Command Palette. If it reports silence, run **EchoCode: Choose Microphone**.
+2. Open `GenericStack.java`, select the `push` method, press **Ctrl+Alt+Space** and ask *"Walk me through this method."*
+3. Press **Ctrl+Alt+Space** again, or just stop talking for two seconds. The answer plays through the EchoCode panel at the bottom of the window.
+
+The **EchoCode** output channel logs every step, including connection time and the latency of each answer.
+
+**Useful commands**
+
+| Where | Command | What it does |
+|---|---|---|
+| `extension/` | `npm test` | Unit tests for context building and audio helpers |
+| `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
+| `extension/` | `npm run watch` | Rebuilds on save (reload the Development Host to pick up changes) |
+| `backend/` | `npm run build` | Production build of the backend |
+
+**Settings** (search "EchoCode" in Settings): `echocode.backendUrl` (default `http://localhost:3000`), `echocode.micDeviceIndex`, `echocode.maxContextLines` and `echocode.autoStopSilenceMs`.
 
 ## Presentation and judging
 
