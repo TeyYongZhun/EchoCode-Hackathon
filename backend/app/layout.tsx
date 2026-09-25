@@ -5,7 +5,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'EchoCode: the voice-first AI pair programmer',
   description:
-    'Highlight code in VS Code, hold a key and ask out loud. EchoCode explains it back in about a second, powered by Gemini Live.',
+    'Highlight code in VS Code, hold a key and ask out loud. EchoCode explains it back out loud, powered by AssemblyAI.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

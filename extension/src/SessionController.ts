@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { FRAME_MS, MicRecorder } from './audio/MicRecorder';
-import { base64PcmSeconds, pcm16ToBase64, rmsLevel } from './audio/pcm';
+import { base64PcmSeconds, rmsLevel } from './audio/pcm';
 import { SilenceDetector } from './audio/silenceDetector';
 import { readSettings } from './config';
 import { captureEditorContext, captureTarget, type EditorTracker, type QuestionTarget } from './context/editorContext';
 import { findLineReferences } from './context/lineReferences';
-import { LiveClient } from './gemini/LiveClient';
-import { fetchSuggestion } from './gemini/suggestionClient';
-import { fetchSessionTicket, type SessionTicket } from './gemini/tokenProvider';
-import { reportUsage } from './gemini/usageClient';
+import { AgentClient, ResumeFailedError } from './voice/AgentClient';
+import { fetchSuggestion } from './voice/suggestionClient';
+import { fetchSessionTicket } from './voice/tokenProvider';
+import { reportUsage } from './voice/usageClient';
 import { HotkeyPresses } from './hotkeyPresses';
 import type { SessionState } from './protocol';
 import type { AssistantViewProvider } from './ui/AssistantViewProvider';
@@ -33,6 +33,10 @@ const HOTKEY_LABEL = process.platform === 'darwin' ? 'Ctrl+Shift+Space' : 'Ctrl+
 /** Keep a connection warm in the background only while EchoCode is in active use. */
 const WARM_WINDOW_MS = 10 * 60_000;
 const MIN_WARM_INTERVAL_MS = 60_000;
+/** End an unused session after this long; AssemblyAI bills by session time. */
+const IDLE_CLOSE_MS = 3 * 60_000;
+/** The panel starts playing a reply's first chunk about this long after it arrives. */
+const PLAYBACK_START_DELAY_MS = 50;
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -40,19 +44,19 @@ function errorMessage(err: unknown): string {
 
 /**
  * Runs push-to-talk turns: hotkey → capture editor context and mic audio →
- * Gemini Live → spoken answer in the panel.
+ * AssemblyAI Voice Agent → spoken answer in the panel.
  *
  *   idle ─talk─► connecting ─► listening ─talk/silence─► thinking ─audio─► speaking ─done─► idle
  *                                  ▲                                          │
  *                                  └───────────── talk (barge in) ────────────┘
  *
- * Gemini only hears about a question once the user actually speaks. It rejects
- * a question with no audio ("Precondition check failed") and answers silence
- * with nonsense, so a turn with no speech is cancelled locally.
+ * The agent only hears a question once the user actually speaks: a turn with
+ * no speech is cancelled locally rather than sending silence, which voice
+ * models tend to answer with nonsense.
  */
 export class SessionController implements vscode.Disposable {
   private state: SessionState = 'idle';
-  private readonly live: LiveClient;
+  private readonly live: AgentClient;
   private readonly mic = new MicRecorder();
   private readonly presses = new HotkeyPresses();
   private holding = false;
@@ -71,13 +75,13 @@ export class SessionController implements vscode.Disposable {
   private highlightTimers: NodeJS.Timeout[] = [];
   private readonly highlighter = new LineHighlighter();
   private readonly cards: CodeCards;
-  /** The editor context Gemini already has, so it's only resent when it changes. */
+  /** The editor context the agent already has, so it's only resent when it changes. */
   private lastContext: string | undefined;
   /** Mic audio not yet sent: captured while connecting or before speech began. */
-  private pendingAudio: string[] = [];
+  private pendingAudio: Int16Array[] = [];
   /** The Live session is open and ready for this turn's audio. */
   private sessionReady = false;
-  /** Gemini has been told a question started (activityStart sent). */
+  /** The agent is receiving this question's audio. */
   private activityOpen = false;
   private finishRequested = false;
   private silence = new SilenceDetector(FRAME_MS, 0);
@@ -89,12 +93,15 @@ export class SessionController implements vscode.Disposable {
   private questionTimer: NodeJS.Timeout | undefined;
   /** The connection attempt in progress, shared by a question and a background reconnect. */
   private connecting: Promise<void> | undefined;
-  /** Gemini asked us to move to a new connection; do it as soon as we're idle. */
-  private reconnectWhenIdle = false;
+  private idleCloseTimer: NodeJS.Timeout | undefined;
   private lastActivityAt = 0;
   private lastWarmReconnectAt = 0;
   /** Seconds of question and answer audio in this turn, for the usage meter. */
   private voiceSeconds = 0;
+  /** When this turn's reply started playing, to time highlights against its words. */
+  private replyPlaysAt = 0;
+  /** Where each received word ends in modelText, and when it's spoken in the reply (ms). */
+  private wordTimes: { end: number; startMs: number }[] = [];
 
   private readonly view: AssistantViewProvider;
   private readonly editors: EditorTracker;
@@ -111,15 +118,14 @@ export class SessionController implements vscode.Disposable {
     this.log = log;
     this.installId = installId;
     this.cards = new CodeCards(editors);
-    this.live = new LiveClient(
+    this.live = new AgentClient(
       {
         audio: (data) => this.onAudio(data),
         inputTranscript: (text) => this.onInputTranscript(text),
-        outputTranscript: (text) => this.onOutputTranscript(text),
+        outputTranscript: (text, startMs) => this.onOutputTranscript(text, startMs),
         turnComplete: () => this.onTurnComplete(),
-        interrupted: () => this.view.post({ type: 'flushAudio' }),
+        interrupted: () => this.onInterrupted(),
         closed: (reason) => this.onSessionClosed(reason),
-        goAway: () => this.onGoAway(),
       },
       log,
     );
@@ -184,6 +190,7 @@ export class SessionController implements vscode.Disposable {
 
   dispose(): void {
     this.clearTimers();
+    clearTimeout(this.idleCloseTimer);
     void this.mic.stop();
     this.live.close();
     this.highlighter.dispose();
@@ -235,6 +242,9 @@ export class SessionController implements vscode.Disposable {
     const turn = ++this.turnId;
     this.lastActivityAt = Date.now();
     this.voiceSeconds = 0;
+    this.replyPlaysAt = 0;
+    this.wordTimes = [];
+    clearTimeout(this.idleCloseTimer);
     this.turnContext = captureEditorContext(editor, settings.maxContextLines);
     this.turnTarget = captureTarget(editor);
     this.clearHighlights();
@@ -292,7 +302,7 @@ export class SessionController implements vscode.Disposable {
     this.questionTimer = setTimeout(() => void this.guarded(() => this.finishSpeaking()), MAX_QUESTION_MS);
   }
 
-  /** Opens a Live session unless one is open or opening. Concurrent callers share one attempt. */
+  /** Opens a voice session unless one is open or opening. Concurrent callers share one attempt. */
   private ensureSession(): Promise<void> {
     if (this.live.isOpen) return Promise.resolve();
     this.connecting ??= this.openSession().finally(() => {
@@ -301,47 +311,48 @@ export class SessionController implements vscode.Disposable {
     return this.connecting;
   }
 
-  /** Connects, resuming the previous conversation when Gemini gave us a handle for it. */
+  /** Connects, resuming a recently dropped session (and its conversation) when possible. */
   private async openSession(): Promise<void> {
     const backendUrl = readSettings().backendUrl;
-    const handle = this.live.resumeHandle;
+    const resuming = this.live.canResume;
     const started = Date.now();
-    let ticket: SessionTicket;
+    let ticket = await fetchSessionTicket(backendUrl, this.installId);
     try {
-      ticket = await fetchSessionTicket(backendUrl, this.installId, handle);
       await this.live.connect(ticket);
     } catch (err) {
-      if (!handle) throw err;
-      // Handles expire; carry on with a fresh conversation rather than failing.
-      this.log.warn(`Couldn't resume the previous conversation (${errorMessage(err)}). Starting a new one.`);
-      this.live.forgetResumeHandle();
+      if (!(err instanceof ResumeFailedError)) throw err;
+      // The session expired; carry on with a fresh conversation rather than failing.
+      this.log.warn(`Couldn't resume the previous conversation (${err.message}). Starting a new one.`);
       ticket = await fetchSessionTicket(backendUrl, this.installId);
       await this.live.connect(ticket);
     }
     if (ticket.usage) this.view.post({ type: 'usage', ...ticket.usage });
     this.lastContext = undefined;
-    this.log.info(`Connected in ${Date.now() - started} ms${handle ? ', continuing the earlier conversation' : ''}`);
+    this.scheduleIdleClose();
+    this.log.info(`Connected in ${Date.now() - started} ms${resuming ? ', continuing the earlier conversation' : ''}`);
+  }
+
+  /** Ends the session once EchoCode has sat unused for a while, so idle time isn't billed. */
+  private scheduleIdleClose(): void {
+    clearTimeout(this.idleCloseTimer);
+    this.idleCloseTimer = setTimeout(() => {
+      if (this.state !== 'idle' || !this.live.isOpen) return;
+      this.log.info('Closing the idle voice session');
+      this.live.close();
+    }, IDLE_CLOSE_MS);
   }
 
   /** Moves to a fresh connection in the background, if EchoCode has been used recently. */
   private warmReconnect(): void {
-    this.reconnectWhenIdle = false;
     const now = Date.now();
     // At most one a minute, so a connection that keeps failing can't loop.
     if (now - this.lastActivityAt > WARM_WINDOW_MS || now - this.lastWarmReconnectAt < MIN_WARM_INTERVAL_MS) return;
     this.lastWarmReconnectAt = now;
     this.log.info('Reconnecting in the background so the next question starts instantly');
-    this.live.close();
     this.ensureSession().catch((err) => this.log.warn(`Background reconnect failed: ${errorMessage(err)}`));
   }
 
-  private onGoAway(): void {
-    // Finish the current answer first; switching connections mid-answer would cut it off.
-    if (this.state === 'idle') this.warmReconnect();
-    else this.reconnectWhenIdle = true;
-  }
-
-  /** Tells Gemini a question has started, once the session is ready and the user is speaking. */
+  /** Tells the agent a question has started, once the session is ready and the user is speaking. */
   private openActivityIfSpeaking(): void {
     if (!this.sessionReady || this.activityOpen || !this.silence.speechDetected) return;
     if (this.turnContext !== this.lastContext) {
@@ -370,7 +381,7 @@ export class SessionController implements vscode.Disposable {
     this.openActivityIfSpeaking();
 
     if (!this.activityOpen) {
-      this.log.warn('No speech detected, so nothing was sent to Gemini.');
+      this.log.warn('No speech detected, so nothing was sent to the voice agent.');
       this.pendingAudio = [];
       this.setState('idle');
       this.view.post({ type: 'error', message: NOTHING_HEARD });
@@ -395,12 +406,11 @@ export class SessionController implements vscode.Disposable {
     // About 15 updates a second is plenty for a visualizer.
     if (++this.frameCount % 2 === 0) this.view.post({ type: 'micLevel', level });
 
-    const chunk = pcm16ToBase64(pcm);
     if (this.activityOpen) {
-      this.live.sendAudio(chunk);
+      this.live.sendAudio(pcm);
       this.voiceSeconds += FRAME_MS / 1000;
     } else {
-      this.pendingAudio.push(chunk);
+      this.pendingAudio.push(pcm);
       // Before anyone speaks, only a short pre-roll is worth keeping.
       if (!this.silence.speechDetected && this.pendingAudio.length > PRE_ROLL_FRAMES) this.pendingAudio.shift();
     }
@@ -416,6 +426,7 @@ export class SessionController implements vscode.Disposable {
     if (this.state !== 'thinking' && this.state !== 'speaking') return;
     if (!this.sawAudio) {
       this.sawAudio = true;
+      this.replyPlaysAt ||= Date.now() + PLAYBACK_START_DELAY_MS;
       const ms = Date.now() - this.endOfSpeechAt;
       this.log.info(`Turn ${this.turnId}: first audio after ${ms} ms`);
       this.view.post({ type: 'latency', turnId: this.turnId, ms });
@@ -433,18 +444,28 @@ export class SessionController implements vscode.Disposable {
     this.view.post({ type: 'userTranscript', turnId: this.turnId, text: this.userText });
   }
 
-  private onOutputTranscript(text: string): void {
+  private onOutputTranscript(text: string, startMs: number | null): void {
     if (this.state !== 'thinking' && this.state !== 'speaking') return;
     this.modelText += text;
+    if (startMs !== null) this.wordTimes.push({ end: this.modelText.length, startMs });
     this.view.post({ type: 'modelTranscript', turnId: this.turnId, text: this.modelText });
     this.scheduleHighlights(false);
   }
 
+  /** The agent stopped mid-answer because the user spoke over it. */
+  private onInterrupted(): void {
+    this.view.post({ type: 'flushAudio' });
+    this.playbackEndsAt = 0;
+    // Normally a new question is already under way; if not, finish this turn.
+    if (this.state === 'thinking' || this.state === 'speaking') this.onTurnComplete();
+  }
+
   /**
-   * Highlights lines as the answer mentions them ("on line twenty-one"). The
-   * transcript runs ahead of playback, so each highlight waits until the audio
-   * received so far has nearly played. Until the answer is complete, a number
-   * at the very end of the text may still be growing ("twenty" → "twenty-one").
+   * Highlights lines as the answer mentions them ("on line twenty-one"), timed
+   * to when that word plays: AssemblyAI gives each word's offset in the reply
+   * audio. Without timing, each highlight waits until the audio received so far
+   * has nearly played. Until the answer is complete, a number at the very end
+   * of the text may still be growing ("twenty" → "twenty-one").
    */
   private scheduleHighlights(final: boolean): void {
     const document = this.turnTarget?.document;
@@ -454,7 +475,9 @@ export class SessionController implements vscode.Disposable {
     const refs = findLineReferences(text).filter((ref) => final || ref.endOffset < settledLength);
     const turn = this.turnId;
     for (const ref of refs.slice(this.highlightedRefs)) {
-      const delay = Math.max(0, this.playbackEndsAt - Date.now() - HIGHLIGHT_LEAD_MS);
+      const word = this.wordTimes.find((w) => w.end >= ref.endOffset);
+      const playsAt = word && this.replyPlaysAt ? this.replyPlaysAt + word.startMs : this.playbackEndsAt;
+      const delay = Math.max(0, playsAt - Date.now() - HIGHLIGHT_LEAD_MS);
       this.highlightTimers.push(
         setTimeout(() => {
           if (turn === this.turnId) this.highlighter.show(document, ref.start, ref.end);
@@ -516,7 +539,7 @@ export class SessionController implements vscode.Disposable {
     this.scheduleHighlights(true);
     void this.requestCodeCard(turn);
     void this.reportTurnUsage(this.voiceSeconds);
-    // Gemini sends audio faster than real time, so wait for playback to finish.
+    // Reply audio arrives faster than real time, so wait for playback to finish.
     const wait = Math.max(0, this.playbackEndsAt - Date.now()) + PLAYBACK_TAIL_MS;
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
@@ -531,7 +554,10 @@ export class SessionController implements vscode.Disposable {
     this.sessionReady = false;
     this.activityOpen = false;
     if (this.state === 'listening' || this.state === 'thinking') {
-      this.fail(`Gemini ended the session (${reason}). Press the hotkey to start again.`);
+      // 1006 is an abrupt drop (network or a server hiccup), not something the user did.
+      const what = reason === 'code 1006' ? 'The connection to the voice agent dropped' : `The voice agent ended the session (${reason})`;
+      this.fail(`${what}. Reconnecting now, so just ask again.`);
+      this.warmReconnect();
     } else if (this.state === 'idle') {
       this.warmReconnect();
     }
@@ -555,7 +581,8 @@ export class SessionController implements vscode.Disposable {
     this.view.post({ type: 'state', state });
     this.stateChanged.fire(state);
     void vscode.commands.executeCommand('setContext', 'echocode.state', state);
-    if (state === 'idle' && this.reconnectWhenIdle) queueMicrotask(() => this.state === 'idle' && this.warmReconnect());
+    if (state === 'idle' && this.live.isOpen) this.scheduleIdleClose();
+    else clearTimeout(this.idleCloseTimer);
   }
 
   private clearTimers(): void {

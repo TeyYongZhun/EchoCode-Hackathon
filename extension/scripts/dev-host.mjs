@@ -31,7 +31,7 @@ async function backendStatus() {
     const response = await fetch(`${backendUrl}/api/health`, { signal: AbortSignal.timeout(5000) });
     const health = await response.json();
     if (health.ok !== true) return 'unknown';
-    if (!health.configured) console.warn('! The backend has no GEMINI_API_KEY. Add it to backend/.env.local.');
+    if (!health.configured) console.warn('! The backend has no ASSEMBLYAI_API_KEY. Add it to backend/.env.local.');
     return 'up';
   } catch (err) {
     return err?.cause?.code === 'ECONNREFUSED' ? 'down' : 'unknown';

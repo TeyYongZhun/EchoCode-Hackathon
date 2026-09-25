@@ -4,7 +4,7 @@ const SAMPLE_RATE = 24000;
 /** Head start for the first chunk so tiny network gaps don't cause clicks. */
 const START_DELAY_S = 0.05;
 
-/** Plays Gemini's streamed 24 kHz PCM chunks back to back, gap-free. */
+/** Plays the agent's streamed 24 kHz PCM chunks back to back, gap-free. */
 export class AudioPlayer {
   private context: AudioContext | undefined;
   private output: AnalyserNode | undefined;

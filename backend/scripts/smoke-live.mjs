@@ -1,9 +1,7 @@
 // End-to-end check without VS Code or a microphone:
-// backend token -> Gemini Live session -> spoken reply (counted, not played).
+// backend token -> AssemblyAI Voice Agent session -> spoken reply (counted, not played).
 //
 // Usage: npm run smoke [-- http://localhost:3000]
-import { GoogleGenAI } from '@google/genai';
-
 const backendUrl = (process.argv[2] ?? 'http://localhost:3000').replace(/\/+$/, '');
 
 const response = await fetch(`${backendUrl}/api/token`, {
@@ -16,42 +14,42 @@ if (!response.ok) {
   console.error(`Token request failed (HTTP ${response.status}):`, ticket.error ?? ticket);
   process.exit(1);
 }
-console.log(`Token OK for model ${ticket.model} (API ${ticket.apiVersion}).`);
+console.log(`Token OK (voice: ${ticket.session.output.voice}).`);
 
 const { promise: done, resolve: finish, reject: fail } = Promise.withResolvers();
 const timer = setTimeout(() => fail(new Error('No complete reply within 30 seconds.')), 30_000);
 let audioBytes = 0;
 let transcript = '';
 let firstAudioMs;
-let sentAt;
+let askedAt;
 
-const ai = new GoogleGenAI({ apiKey: ticket.token, httpOptions: { apiVersion: ticket.apiVersion } });
-const session = await ai.live.connect({
-  model: ticket.model,
-  config: ticket.config,
-  callbacks: {
-    onmessage: (msg) => {
-      const content = msg.serverContent;
-      for (const part of content?.modelTurn?.parts ?? []) {
-        if (part.inlineData?.data) {
-          firstAudioMs ??= Date.now() - sentAt;
-          audioBytes += Buffer.from(part.inlineData.data, 'base64').length;
-        }
-      }
-      if (content?.outputTranscription?.text) transcript += content.outputTranscription.text;
-      if (content?.turnComplete) finish();
-    },
-    onerror: (e) => fail(new Error(e.message ?? 'WebSocket error')),
-    onclose: (e) => fail(new Error(`Session closed: ${e.code} ${e.reason}`)),
-  },
-});
-console.log('Live session open. Asking a question...');
-
-sentAt = Date.now();
-session.sendClientContent({
-  turns: [{ role: 'user', parts: [{ text: 'In one short sentence, what is a stack data structure?' }] }],
-  turnComplete: true,
-});
+const ws = new WebSocket(`${ticket.url}?token=${encodeURIComponent(ticket.token)}`);
+ws.onopen = () => ws.send(JSON.stringify({ type: 'session.update', session: ticket.session }));
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+  switch (msg.type) {
+    case 'session.ready':
+      console.log('Voice Agent session ready. Asking a question...');
+      askedAt = Date.now();
+      ws.send(JSON.stringify({ type: 'conversation.message', role: 'user', content: 'In one short sentence, what is a stack data structure?' }));
+      ws.send(JSON.stringify({ type: 'reply.create' }));
+      break;
+    case 'reply.audio':
+      firstAudioMs ??= Date.now() - askedAt;
+      audioBytes += Buffer.from(msg.data, 'base64').length;
+      break;
+    case 'transcript.agent':
+      transcript = msg.text;
+      break;
+    case 'reply.done':
+      finish();
+      break;
+    case 'session.error':
+      fail(new Error(`${msg.code}: ${msg.message}`));
+      break;
+  }
+};
+ws.onclose = (event) => fail(new Error(`Session closed: ${event.code} ${event.reason}`));
 
 try {
   await done;
@@ -64,5 +62,6 @@ try {
   process.exitCode = 1;
 } finally {
   clearTimeout(timer);
-  session.close();
+  ws.onclose = null;
+  ws.close();
 }

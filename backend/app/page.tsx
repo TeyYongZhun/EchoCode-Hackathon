@@ -22,8 +22,8 @@ const STEPS = [
 
 const FEATURES = [
   {
-    title: 'Native audio, not a chatbot wrapper',
-    body: 'Gemini Live hears your voice and reads your code in one real-time stream. There is no speech-to-text, LLM, text-to-speech chain adding delay.',
+    title: 'A real conversation, not a chatbot wrapper',
+    body: "AssemblyAI's Voice Agent hears you, reasons over your code and answers in one streaming session, with coding terms boosted and interruptions handled like a colleague would.",
   },
   {
     title: 'Context without copy-paste',
@@ -89,7 +89,7 @@ export default function Home() {
               </a>
             </div>
             <p className="hotkey">
-              Hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd> and speak. Powered by the Gemini Live API.
+              Hold <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>Space</kbd> and speak. Powered by AssemblyAI.
             </p>
           </div>
 
@@ -161,19 +161,19 @@ export default function Home() {
         <div className="wrap">
           <h2>Architecture</h2>
           <p className="section-lede">
-            The API key never leaves this server. It mints single-use session tokens, and your voice streams straight
-            to Gemini, with no proxy hop in the audio path.
+            The AssemblyAI key never leaves this server. It mints single-use session tokens, and your voice streams
+            straight to AssemblyAI&apos;s Voice Agent, with no proxy hop in the audio path.
           </p>
-          <pre className="diagram">{`VS Code extension ── mic (16 kHz) + editor context ──wss──► Gemini Live (gemini-3.8-live)
+          <pre className="diagram">{`VS Code extension ── mic (24 kHz) + editor context ──wss──► AssemblyAI Voice Agent API
       │                                                        │
-      │  POST /api/token   (once per session)                  └─► spoken answer + transcript
+      │  POST /api/token   (once per session)                  └─► spoken answer + word-timed transcript
       │  POST /api/suggest (after an answer, for code cards)
       ▼
-Vercel · Next.js ── GEMINI_API_KEY ──► ephemeral tokens · code cards · usage metering`}</pre>
+Vercel · Next.js ── ASSEMBLYAI_API_KEY ──► single-use tokens · LLM Gateway code cards · usage metering`}</pre>
           <div className="facts">
             <div className="fact">
-              <strong>~1 s</strong>
-              <span>from the end of your question to the first spoken word</span>
+              <strong>Live</strong>
+              <span>subtitles and line highlights, timed word by word to the voice</span>
             </div>
             <div className="fact">
               <strong>0</strong>

@@ -2,7 +2,7 @@
   "name": "echocode-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Mints short-lived Gemini Live tokens for the EchoCode VS Code extension.",
+  "description": "Mints short-lived AssemblyAI Voice Agent tokens and code cards for the EchoCode VS Code extension.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +11,6 @@
     "smoke": "node scripts/smoke-live.mjs"
   },
   "dependencies": {
-    "@google/genai": "^2.24.0",
     "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

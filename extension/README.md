@@ -1,8 +1,8 @@
 # EchoCode
 
-**The voice-first AI pair programmer.** Highlight code, hold a key and ask out loud. EchoCode reads the file you're looking at and talks you through it in about a second, highlighting the lines it mentions and handing you ready-to-insert code when it suggests a fix.
+**The voice-first AI pair programmer.** Highlight code, hold a key and ask out loud. EchoCode reads the file you're looking at and talks you through it, highlighting the lines it mentions and handing you ready-to-insert code when it suggests a fix.
 
-Powered by the Gemini Live API.
+Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gateway for code cards.
 
 ## How to use it
 
@@ -33,7 +33,7 @@ Press the key while EchoCode is talking to interrupt it with a new question.
 
 ## Privacy
 
-Nothing is recorded until you press the hotkey. Your question audio and the surrounding code go to Google's Gemini Live API to be answered. No Gemini API key is stored in the extension: the backend hands out short-lived, single-use session tokens.
+Nothing is recorded until you press the hotkey. Your question audio and the surrounding code go to AssemblyAI to be answered. No API key is stored in the extension: the backend hands out short-lived, single-use session tokens.
 
 ## Free and Pro
 

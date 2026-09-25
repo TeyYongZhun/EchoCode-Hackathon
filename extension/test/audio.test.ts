@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { base64PcmSeconds, pcm16ToBase64, rmsLevel } from '../src/audio/pcm.ts';
+import { upsample16kTo24k } from '../src/audio/resample.ts';
 import { SilenceDetector } from '../src/audio/silenceDetector.ts';
 import { base64ToInt16, int16ToFloat32 } from '../webview/audioMath.ts';
 
@@ -82,4 +83,29 @@ test('SilenceDetector with silenceMs 0 never auto-stops', () => {
   const detector = new SilenceDetector(FRAME_MS, 0);
   feed(detector, 0.2, 1000);
   assert.equal(feed(detector, 0, 10_000), false);
+});
+
+test('upsample16kTo24k turns a 512-sample frame into 768 samples', () => {
+  assert.equal(upsample16kTo24k(new Int16Array(512)).length, 768);
+});
+
+test('upsample16kTo24k keeps a constant signal constant', () => {
+  const out = upsample16kTo24k(new Int16Array(512).fill(1234));
+  assert.ok(out.every((s) => s === 1234));
+});
+
+test('upsample16kTo24k interpolates between samples', () => {
+  // A straight ramp stays a straight ramp at the new rate.
+  const ramp = Int16Array.from({ length: 4 }, (_, i) => i * 300);
+  assert.deepEqual(Array.from(upsample16kTo24k(ramp)), [0, 200, 400, 600, 800, 900]);
+});
+
+test('upsample16kTo24k keeps a 16 kHz tone at the same pitch', () => {
+  // 1 kHz sine at 16 kHz: 16 samples per cycle; at 24 kHz it should be 24 samples per cycle.
+  const tone = Int16Array.from({ length: 480 }, (_, i) => Math.round(10000 * Math.sin((2 * Math.PI * i) / 16)));
+  const out = upsample16kTo24k(tone);
+  let crossings = 0;
+  for (let i = 1; i < out.length; i++) if (out[i - 1] < 0 && out[i] >= 0) crossings++;
+  // 480 input samples = 30 cycles.
+  assert.ok(crossings >= 29 && crossings <= 30, `expected ~30 cycles, got ${crossings}`);
 });

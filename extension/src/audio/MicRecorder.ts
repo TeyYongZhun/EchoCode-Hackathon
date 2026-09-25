@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import type { MicWorkerMessage, MicWorkerRequest } from './micWorker';
 
-/** PvRecorder always records 16 kHz, 16-bit mono, which is exactly what Gemini Live expects. */
+/** PvRecorder always records 16 kHz, 16-bit mono; AgentClient upsamples it to the 24 kHz AssemblyAI expects. */
 export const MIC_SAMPLE_RATE = 16000;
 export const FRAME_LENGTH = 512;
 export const FRAME_MS = (FRAME_LENGTH / MIC_SAMPLE_RATE) * 1000;

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { EditorTracker, QuestionTarget } from '../context/editorContext';
-import type { Suggestion } from '../gemini/suggestionClient';
+import type { Suggestion } from '../voice/suggestionClient';
 import type { CodeCard } from '../protocol';
 
 interface StoredCard {

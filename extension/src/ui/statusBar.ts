@@ -3,7 +3,7 @@ import type { SessionState } from '../protocol';
 
 const APPEARANCE: Record<SessionState, { text: string; tooltip: string; background?: string }> = {
   idle: { text: '$(robot) EchoCode', tooltip: 'EchoCode: click (or press Ctrl+Alt+Space) and ask about your code' },
-  connecting: { text: '$(loading~spin) Connecting…', tooltip: 'Connecting to Gemini. Keep talking; click when done.' },
+  connecting: { text: '$(loading~spin) Connecting…', tooltip: 'Connecting to AssemblyAI. Keep talking; click when done.' },
   listening: {
     text: '$(record) Listening…',
     tooltip: 'EchoCode is listening. Click to send your question.',

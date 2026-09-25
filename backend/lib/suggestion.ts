@@ -1,12 +1,25 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { gatewayJson } from './assemblyai';
 
 /**
  * Turns a finished spoken answer into the exact code shown on the developer's
- * screen. This runs as a separate, fast text call after the voice answer, so
- * it never slows the voice down.
+ * screen. This runs as a separate, fast AssemblyAI LLM Gateway call after the
+ * voice answer, so it never slows the voice down.
  */
 
-export const SUGGEST_MODEL = process.env.GEMINI_SUGGEST_MODEL ?? 'gemini-3.5-flash-lite';
+export const SUGGEST_MODEL = process.env.ASSEMBLYAI_SUGGEST_MODEL ?? 'claude-haiku-4-5-20251001';
+
+/** Strict JSON schema for the gateway: every field required, nothing extra. */
+const CODE_CARD_SCHEMA = {
+  type: 'object',
+  properties: {
+    hasCode: { type: 'boolean' },
+    title: { type: 'string' },
+    code: { type: 'string' },
+    replaceSelection: { type: 'boolean' },
+  },
+  required: ['hasCode', 'title', 'code', 'replaceSelection'],
+  additionalProperties: false,
+};
 
 const MAX_FIELD_CHARS = 60_000;
 
@@ -55,36 +68,18 @@ Rules:
 - Write only the change the answer describes. Don't add other improvements, comments about the change, or explanations.
 - If the code replaces the selected lines, set replaceSelection to true and return a complete drop-in replacement for exactly those lines, keeping their indentation. Don't include imports, package lines or code outside the selection; if a new type is needed, use its fully qualified name (for example java.util.HashSet).
 - Otherwise set replaceSelection to false and return a self-contained snippet to insert at the cursor.
-- title: a short label of at most six words, such as "Use HashSets for lookups".`;
+- title: a short label of at most six words, such as "Use HashSets for lookups".
+- When hasCode is false, set title and code to empty strings and replaceSelection to false.`;
 }
 
 export async function generateSuggestion(apiKey: string, req: SuggestRequest): Promise<Suggestion | null> {
-  const ai = new GoogleGenAI({ apiKey });
-  const result = await ai.models.generateContent({
-    model: SUGGEST_MODEL,
-    contents: buildPrompt(req),
-    config: {
-      temperature: 0.2,
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          hasCode: { type: Type.BOOLEAN },
-          title: { type: Type.STRING },
-          code: { type: Type.STRING },
-          replaceSelection: { type: Type.BOOLEAN },
-        },
-        required: ['hasCode'],
-      },
-    },
-  });
-
-  const parsed = JSON.parse(result.text ?? '{}') as {
-    hasCode?: boolean;
-    title?: string;
-    code?: string;
-    replaceSelection?: boolean;
-  };
+  const parsed = await gatewayJson<{ hasCode?: boolean; title?: string; code?: string; replaceSelection?: boolean }>(
+    apiKey,
+    SUGGEST_MODEL,
+    buildPrompt(req),
+    'code_card',
+    CODE_CARD_SCHEMA,
+  );
   const code = parsed.code?.replace(/^\n+|\s+$/g, '');
   if (!parsed.hasCode || !code) return null;
   return {

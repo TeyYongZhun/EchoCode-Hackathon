@@ -1,13 +1,13 @@
-import type { LiveConnectConfig } from '@google/genai';
 import type { Usage } from './usageClient';
 
-/** Everything the extension needs to open one Gemini Live session. */
+/** Everything the extension needs to open one AssemblyAI Voice Agent session. */
 export interface SessionTicket {
-  /** Single-use ephemeral token ("auth_tokens/..."), never the real API key. */
+  /** Single-use AssemblyAI token, never the real API key. */
   token: string;
-  model: string;
-  apiVersion: string;
-  config: LiveConnectConfig;
+  /** The Voice Agent WebSocket endpoint. */
+  url: string;
+  /** Sent as the first session.update: prompt, voice, keyterms, audio formats. */
+  session: Record<string, unknown>;
   expiresAt: string;
   /** This month's usage; null or missing when the backend doesn't meter. */
   usage?: Usage | null;
@@ -19,29 +19,21 @@ function isTicket(value: unknown): value is SessionTicket {
   const v = value as Partial<SessionTicket> | undefined;
   return (
     typeof v?.token === 'string' &&
-    typeof v.model === 'string' &&
-    typeof v.apiVersion === 'string' &&
-    typeof v.config === 'object' &&
-    v.config !== null
+    typeof v.url === 'string' &&
+    typeof v.session === 'object' &&
+    v.session !== null
   );
 }
 
-/**
- * Asks the EchoCode backend for a fresh session token. Passing the resumption
- * handle of an earlier session makes the new session continue that conversation.
- */
-export async function fetchSessionTicket(
-  backendUrl: string,
-  installId: string,
-  resumeHandle?: string,
-): Promise<SessionTicket> {
+/** Asks the EchoCode backend for a fresh single-use session token. */
+export async function fetchSessionTicket(backendUrl: string, installId: string): Promise<SessionTicket> {
   const base = backendUrl.replace(/\/+$/, '');
   let response: Response;
   try {
     response = await fetch(`${base}/api/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ installId, resumeHandle }),
+      body: JSON.stringify({ installId }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {

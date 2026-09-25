@@ -1,3 +1,4 @@
+import { assemblyAiKey } from '@/lib/assemblyai';
 import { generateSuggestion, parseSuggestRequest } from '@/lib/suggestion';
 
 export const dynamic = 'force-dynamic';
@@ -7,9 +8,9 @@ export const dynamic = 'force-dynamic';
  * answer didn't propose any. Called by the extension once an answer ends.
  */
 export async function POST(request: Request): Promise<Response> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = assemblyAiKey();
   if (!apiKey) {
-    return Response.json({ error: 'The EchoCode backend has no GEMINI_API_KEY configured.' }, { status: 500 });
+    return Response.json({ error: 'The EchoCode backend has no ASSEMBLYAI_API_KEY configured.' }, { status: 500 });
   }
 
   const body: unknown = await request.json().catch(() => undefined);

@@ -4,9 +4,9 @@
 
 Highlight the code that confuses you, press **Ctrl+Alt+Space** and ask your question out loud. EchoCode reads the file you're looking at, then a virtual Senior Staff Engineer talks you through the logic, the architecture and the bug. The answer is spoken back in real time with live subtitles.
 
-EchoCode runs on the **Gemini Live API** (`gemini-3.8-live`), which listens, reasons and speaks in one native audio stream.
+EchoCode runs on **AssemblyAI**. The **Voice Agent API** hears your question, reasons over your code and speaks the answer in one streaming session. The **LLM Gateway** writes the exact code behind a suggested fix.
 
-> **Demo:** a GIF of the three demo scenes will be added on Day 3 of the build (see [Build plan](#build-plan)).
+> **Demo:** a GIF of the three demo scenes is still to be recorded (see [Build plan](#build-plan)). Landing page: https://echo-code-hackathon.vercel.app
 
 ---
 
@@ -24,20 +24,20 @@ EchoCode makes that explanation effortless. If a nested loop or a generic type c
 
 ## What makes it different
 
-- **Native audio-to-audio, not a chatbot wrapper.** Most voice assistants chain speech-to-text, a language model and text-to-speech. Gemini Live replaces that pipeline with one real-time stream that hears your question and reads your code at the same time.
+- **A real conversation, not a chatbot wrapper.** AssemblyAI's Voice Agent runs speech recognition, reasoning and speech as one streaming session. It uses semantic turn detection, knows coding vocabulary such as "HashSet" and "generics" through key terms, and lets you interrupt the answer the way you'd interrupt a colleague.
 - **Context without copy-paste.** The extension quietly attaches the open file, your cursor line, your selection and nearby compiler errors. There's no screen sharing or video, so it stays fast and uses few tokens.
 - **It points at the code.** As the AI explains, the lines it's talking about light up in your editor, so you never have to match the answer back to the code yourself.
 - **Answers you can act on.** Suggested code arrives as a card with a one-click **Insert at Cursor** button.
 
 ## How it works
 
-1. **Voice trigger.** Select a block of code, press **Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS) and ask something like *"Walk me through this method. Why are we using a generic Stack here?"* Press the hotkey again when you're done, or simply stop talking.
+1. **Voice trigger.** Select a block of code, **hold Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS) and ask something like *"Walk me through this method. Why are we using a generic Stack here?"* Let go to send. You can also tap the hotkey (or click the status bar robot), speak, and tap again or just stop talking.
 2. **Silent context capture.** The extension reads the active editor through the VS Code API. It collects the file path, language, cursor line, your selection, the surrounding code with line numbers, and any diagnostics.
-3. **One live session.** The editor context and your microphone audio (16 kHz PCM) travel over a single WebSocket session to Gemini Live.
-4. **Native multimodal reasoning.** Gemini hears your question directly, with no transcription step first, and reasons over the exact code you're looking at.
-5. **Spoken answer.** The reply streams back as 24 kHz audio with live subtitles. The target is under 600 ms from the end of your question to the first spoken word, and every turn shows its measured latency.
+3. **One live session.** The editor context and your microphone audio (24 kHz PCM) travel over a single WebSocket session to AssemblyAI's Voice Agent.
+4. **Reasoning over your code.** The agent transcribes your question, with coding terms boosted, and answers with the exact code you're looking at in mind.
+5. **Spoken answer.** The reply streams back as 24 kHz audio. Every word arrives with its timing, so the subtitles and line highlights keep pace with the voice. Every turn shows its measured latency.
 
-EchoCode is push-to-talk. Nothing is sent until you press the hotkey, so background noise in a busy room can't start a conversation by accident.
+EchoCode is push-to-talk. Nothing is sent until you press the hotkey, so background noise in a busy room can't start a conversation by accident. If you press the hotkey but don't say anything, nothing is sent at all. Pressing it while EchoCode is answering interrupts it with your new question.
 
 ## The interface
 
@@ -55,26 +55,27 @@ EchoCode sits in VS Code's bottom panel, next to the Terminal. VS Code doesn't a
 │ Extension host (Node)                                    │
 │  Ctrl+Alt+Space ─► SessionController (state machine)     │
 │    ├─ editorContext   file · cursor · selection · errors │
-│    ├─ MicRecorder     PvRecorder → 16 kHz PCM frames     │
-│    ├─ LiveClient      @google/genai live session ────────┼─ wss ─► Gemini Live (gemini-3.8-live)
+│    ├─ MicRecorder     PvRecorder → 16 kHz → 24 kHz PCM   │
+│    ├─ AgentClient     paced WebSocket session ───────────┼─ wss ─► AssemblyAI Voice Agent API
 │    ├─ lineReferences  "on line 21" → editor highlight    │
 │    └─ CodeCards       Insert at Cursor / Replace lines   │
 │          ▲ postMessage ▼                                 │
 │ Webview (bottom panel): robot · subtitles · chat log     │
 │    AudioPlayer: 24 kHz PCM → Web Audio                   │
 └──────────────┬───────────────────────────────────────────┘
-               │ HTTPS: /api/token (once per session), /api/suggest (after an answer)
+               │ HTTPS: /api/token (once per session) · /api/suggest and /api/usage (after an answer)
                ▼
-   Vercel · Next.js ── GEMINI_API_KEY ─► ephemeral tokens · code cards (gemini-3.5-flash-lite)
+   Vercel · Next.js ── ASSEMBLYAI_API_KEY ─► single-use tokens · code cards (LLM Gateway) · usage (Upstash Redis)
 ```
 
 The extension is a lightweight client. Everything sensitive stays on a small backend deployed on Vercel.
 
-- **The API key never leaves the server.** The Vercel route `/api/token` uses the Gemini key to create a **single-use ephemeral token**. The token expires within minutes and is locked to EchoCode's model and session settings. The extension uses it to open the live session.
-- **Audio goes straight to Google.** Sending every audio packet through our own WebSocket proxy would add a network hop to each one. Vercel's WebSocket support is also still in beta, with a connection cap of about 5 minutes. Ephemeral tokens give the same key protection as a proxy at the latency of a direct connection.
-- **One source of truth for the AI's setup.** The model, voice and system prompt live in the backend (`backend/lib/liveConfig.ts`). The token route sends that setup to the extension, so client and server never disagree.
-- **The voice model stays fast by doing one job.** Giving the voice model tools made its first word about 2.5 seconds slower and sometimes stalled it, so it only talks. It names lines out loud ("on line twenty-one"), and the extension highlights those lines as they're spoken. When an answer proposes a change, a separate fast text call (`/api/suggest`) writes the exact code for the card, after the voice is already on its way.
-- **Native microphone capture.** VS Code webviews can't use the microphone, so the extension records audio in the extension host with PvRecorder. It produces exactly the format Gemini expects: 16 kHz, 16-bit, mono PCM.
+- **The API key never leaves the server.** The Vercel route `/api/token` uses the AssemblyAI key to create a **single-use token** that must be redeemed within two minutes. The extension uses it to open the Voice Agent session.
+- **Audio goes straight to AssemblyAI.** Sending every audio packet through our own WebSocket proxy would add a network hop to each one. Vercel's WebSocket support is also still in beta, with a connection cap of about 5 minutes. Single-use tokens give the same key protection as a proxy at the latency of a direct connection.
+- **One source of truth for the AI's setup.** The prompt, voice, coding key terms and audio settings live in the backend (`backend/lib/agentConfig.ts`). The token route sends them to the extension, which opens every session with them.
+- **The voice agent does one job.** It only talks. It names lines out loud ("on line twenty-one"), and the extension highlights them at the moment each word plays, using the word timing the Voice Agent sends. When an answer proposes a change, a separate LLM Gateway call (`/api/suggest`) writes the exact code for the card, after the voice is already on its way.
+- **Native microphone capture.** VS Code webviews can't use the microphone, so the extension records 16 kHz audio in the extension host with PvRecorder. It then resamples it to the 24 kHz AssemblyAI expects, and sends it no faster than real time, because the Voice Agent drops audio that arrives faster.
+- **Sessions are cheap and resilient.** A dropped connection reconnects in the background and resumes the same conversation if it's back within 30 seconds. A session nobody has used for 3 minutes is ended, because Voice Agent time is billed while a session is open.
 
 ## Tech stack
 
@@ -82,9 +83,10 @@ The extension is a lightweight client. Everything sensitive stays on a small bac
 |---|---|
 | IDE client | VS Code Extension API, TypeScript, esbuild |
 | Voice capture | `@picovoice/pvrecorder-node` (prebuilt for Windows, macOS and Linux) |
-| Live AI session | `@google/genai` SDK with the Gemini Live API (`gemini-3.8-live`) |
+| Voice conversation | AssemblyAI Voice Agent API over a WebSocket (`ws`) |
+| Code cards | AssemblyAI LLM Gateway (`claude-haiku-4-5-20251001`, structured JSON output) |
 | UI | Webview view (HTML, CSS, TypeScript) with the Web Audio API for playback |
-| Backend | Next.js App Router on Vercel: ephemeral token minting and usage metering |
+| Backend | Next.js App Router on Vercel: single-use tokens, code cards and usage metering |
 | Usage and quota | Upstash Redis through the Vercel Marketplace |
 
 ## Business model
@@ -100,48 +102,28 @@ The extension is a lightweight client. Everything sensitive stays on a small bac
 
 The quota is checked on the server when a session token is created, so the free tier can't be bypassed from the client.
 
-## Build plan
-
-EchoCode is being built during a 3-day hackathon. Each step lands as its own commit, and the boxes are ticked as they're done.
-
-**Day 1: It talks**
-- [x] 0. Project README: pitch, architecture and plan
-- [x] 1. Scaffold the extension (esbuild) and the backend (Next.js), plus the demo files
-- [x] 2. `/api/token` creates ephemeral tokens
-- [x] 3. Microphone check: PvRecorder recording inside VS Code
-- [x] 4. Voice loop: hotkey, then context and mic audio to Gemini Live, then a spoken answer
-
-**Day 2: It looks like EchoCode**
-- [ ] 5. Robot UI with an audio visualizer, the subtitle bubble, the collapsible chat log and the status bar robot
-- [ ] 6. Code cards with Insert at Cursor or Replace lines, and editor line highlights that follow the spoken answer
-- [ ] 7. Latency badge, interrupting the AI mid-answer, and friendly error messages
-- [x] 8. Backend deployed to Vercel
-
-**Day 3: It's a product**
-- [x] 9. Session resumption (reconnects keep the conversation) and background reconnects while in use
-- [x] 10. Freemium quota (30 minutes a month) and per-hour rate limits, stored in Upstash Redis
-- [ ] 11. Landing page ✓, packaged VSIX ✓, final README (demo GIF still to record)
-- [ ] 12. Demo rehearsal and backup recording
-
 ## Repository layout
 
 ```
 extension/
+  README.md                     the extension's page in VS Code (install, commands, settings, privacy)
+  scripts/dev-host.mjs          `npm run dev`: opens VS Code with EchoCode loaded from source
   src/extension.ts              activation: panel, commands, hotkey
   src/SessionController.ts      push-to-talk state machine for each question
   src/audio/                    microphone worker thread, levels, silence detection
   src/context/                  builds the [EDITOR CONTEXT] block from the active editor
-  src/gemini/                   Gemini Live client, and clients for tokens, code cards and usage
+  src/voice/                    AssemblyAI Voice Agent client, and clients for tokens, code cards and usage
   src/ui/                       panel host, status bar robot, line highlights, code cards
   webview/                      panel UI: robot, subtitles, chat log, 24 kHz audio playback
   test/                         unit tests (node --test)
 backend/
   app/page.tsx                  landing page
-  app/api/token/route.ts        mints single-use ephemeral tokens (checks quota and rate limits)
+  app/api/token/route.ts        mints single-use Voice Agent tokens (checks quota and rate limits)
   app/api/suggest/route.ts      writes the code behind an answer, for its code card
   app/api/usage/route.ts        records the voice minutes each answer used
   app/api/health/route.ts       status check
-  lib/liveConfig.ts             model, voice, system prompt and session settings
+  lib/agentConfig.ts            prompt, voice, coding key terms and audio settings
+  lib/assemblyai.ts             AssemblyAI token and LLM Gateway calls
   lib/suggestion.ts             the code-card prompt and JSON schema
   lib/usage.ts                  freemium metering in Upstash Redis
   scripts/smoke-live.mjs        end-to-end check without VS Code
@@ -156,7 +138,7 @@ You'll need:
 - VS Code 1.95 or later
 - A microphone, ideally with headphones
 
-The extension uses the deployed backend at **https://echo-code-hackathon.vercel.app** by default, so you don't need a Gemini key to try it.
+The extension uses the deployed backend at **https://echo-code-hackathon.vercel.app** by default, so you don't need an AssemblyAI key to try it.
 
 **Just want to try it?** Download `echocode-0.1.0.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…**, pick the file, then open the `demo/` folder and follow step 2 below.
 
@@ -180,33 +162,45 @@ This builds EchoCode, checks that the backend is reachable, and opens a VS Code 
 
 The **EchoCode** output channel logs every step, including connection time and the latency of each answer.
 
-**Running your own backend (optional).** You'll need a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey); the free tier is enough.
+**Running your own backend (optional).** You'll need an AssemblyAI API key from your [AssemblyAI dashboard](https://www.assemblyai.com/dashboard).
 
 ```bash
 cd backend
 npm install
-cp .env.example .env.local   # then put your key in GEMINI_API_KEY
+cp .env.example .env.local   # then put your key in ASSEMBLYAI_API_KEY
 npm run dev                  # serves http://localhost:3000
 ```
 
-Set `echocode.backendUrl` to `http://localhost:3000` in VS Code settings. From `extension/`, run `ECHOCODE_BACKEND_URL=http://localhost:3000 npm run dev` to have the launcher start the local backend for you. `npm run smoke` in `backend/` checks the whole path to Gemini without VS Code or a microphone.
+Set `echocode.backendUrl` to `http://localhost:3000` in VS Code settings. From `extension/`, run `ECHOCODE_BACKEND_URL=http://localhost:3000 npm run dev` to have the launcher start the local backend for you. `npm run smoke` in `backend/` checks the whole path to the AssemblyAI Voice Agent without VS Code or a microphone.
 
-To deploy your own on Vercel, import the repository, set **Root Directory** to `backend` and **Framework Preset** to Next.js, and add `GEMINI_API_KEY` as an environment variable. To switch on the free-tier quota, add **Upstash Redis** from the Vercel Marketplace to the project and redeploy. Without it, usage isn't metered and nothing is blocked. The other options are listed in `backend/.env.example`.
+To deploy your own on Vercel, import the repository, set **Root Directory** to `backend` and **Framework Preset** to Next.js, and add `ASSEMBLYAI_API_KEY` as an environment variable. To switch on the free-tier quota, add **Upstash Redis** from the Vercel Marketplace to the project and redeploy. Without it, usage isn't metered and nothing is blocked. The other options are listed in `backend/.env.example`.
 
 **Useful commands**
 
 | Where | Command | What it does |
 |---|---|---|
-| `extension/` | `npm test` | Unit tests for context building and audio helpers |
+| `extension/` | `npm run dev` | Builds EchoCode and opens VS Code on `demo/` with it loaded |
+| `extension/` | `npm test` | Unit tests: editor context, line references, subtitles, hotkey handling, audio and resampling |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the Development Host to pick up changes) |
 | `extension/` | `npm run package` | Builds `echocode-0.1.0.vsix`, including the native microphone library for Windows, macOS and Linux |
+| `backend/` | `npm run dev` | Runs the backend locally at http://localhost:3000 |
+| `backend/` | `npm run smoke` | Asks the Voice Agent one question through the backend and reports the reply and latency |
 | `backend/` | `npm run build` | Production build of the backend and landing page |
 
 **Settings** (search "EchoCode" in Settings): `echocode.backendUrl` (default `https://echo-code-hackathon.vercel.app`), `echocode.micDeviceIndex`, `echocode.maxContextLines` and `echocode.autoStopSilenceMs`.
 
-## Presentation and judging
+## Troubleshooting
 
-- **Live demo.** There are three scenes. First, a walkthrough of a generic `Stack<T>`, with lines highlighted as the AI speaks. Second, *"Why is this slow?"*, which leads to an `ArrayList` → `HashSet` fix inserted with one click. Third, *"Why does this crash?"*, about a null pointer in a linked list. Every answer shows its measured latency.
-- **Try it yourself.** The landing page is at https://echo-code-hackathon.vercel.app. Judges install the packaged extension (`.vsix`) from the GitHub release and open the `demo/` folder. EchoCode runs in desktop VS Code, including desktop VS Code connected to a GitHub Codespace, because the extension always runs on your own machine where the microphone is. Browser-only editors such as vscode.dev can't reach a local microphone.
-- **Commit history.** EchoCode was built solo during the event, and each step of the build plan above is a separate commit.
+| Problem | Fix |
+|---|---|
+| No **🤖 EchoCode** in the status bar | Check the extension is installed and enabled in the Extensions view, then run **Developer: Reload Window**. Right-click the status bar and make sure **EchoCode** is ticked. |
+| The hotkey does nothing | Click inside a code editor first. The terminal and chat boxes take the key for themselves. You can also click the status bar robot or run **EchoCode: Talk / Send Question**. |
+| Double-clicking the `.vsix` opens "VSIX Installer" and fails | That's Visual Studio's installer, not VS Code's. Use **Extensions view → ⋯ → Install from VSIX…** in VS Code instead. |
+| "Couldn't open the microphone" or silence in the mic test | On Windows, turn on **Settings → Privacy & security → Microphone → Let desktop apps access your microphone**, then pick your mic with **EchoCode: Choose Microphone**. |
+| "I didn't hear anything" | EchoCode heard no speech, so nothing was sent. Speak a little closer to the microphone. |
+| "Extension host did not start in 10 seconds" when debugging | The window is waiting for the debugger. Close it and use `npm run dev` in `extension/`, which needs no debugger. |
+| "Can't reach the EchoCode backend" | Check your internet connection, or run the backend locally and set `echocode.backendUrl` to it. |
+
+Every step is logged in **View → Output → EchoCode**.
+

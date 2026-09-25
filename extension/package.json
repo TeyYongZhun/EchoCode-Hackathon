@@ -28,7 +28,7 @@
   ],
   "keywords": [
     "voice",
-    "gemini",
+    "assemblyai",
     "pair programming",
     "tutor"
   ],
@@ -109,7 +109,7 @@
         "echocode.backendUrl": {
           "type": "string",
           "default": "https://echo-code-hackathon.vercel.app",
-          "description": "Base URL of the EchoCode backend that issues Gemini Live session tokens. Use http://localhost:3000 to run your own (npm run dev in backend/)."
+          "description": "Base URL of the EchoCode backend that issues AssemblyAI Voice Agent session tokens. Use http://localhost:3000 to run your own (npm run dev in backend/)."
         },
         "echocode.micDeviceIndex": {
           "type": "integer",
@@ -145,11 +145,12 @@
     "@picovoice/pvrecorder-node": "^1.2.9"
   },
   "devDependencies": {
-    "@google/genai": "^2.24.0",
     "@types/node": "^22.20.4",
     "@types/vscode": "1.95.0",
+    "@types/ws": "^8.18.1",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "ws": "^8.21.3"
   }
 }

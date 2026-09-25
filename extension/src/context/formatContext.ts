@@ -34,7 +34,7 @@ export function contextWindow(
   return { start, end: start + maxLines };
 }
 
-/** Renders the snapshot as the text block sent to Gemini before each question. */
+/** Renders the snapshot as the text block sent to the voice agent before each question. */
 export function formatContext(snapshot: EditorSnapshot, maxLines: number): string {
   const { lines, selection } = snapshot;
   const focusStart = selection?.startLine ?? snapshot.cursorLine;
