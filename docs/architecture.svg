@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 660" width="1100" height="660" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title>EchoCode architecture</title>
+  <desc>The VS Code extension records the microphone, captures editor context and talks to AssemblyAI's Voice Agent API over a WebSocket. A Next.js backend on Vercel holds the AssemblyAI key, mints single-use tokens, writes code cards through the LLM Gateway and meters usage in Upstash Redis.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8fa3bf"/>
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#00d8e8"/>
+    </marker>
+    <marker id="arrow-pink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#ff5fd8"/>
+    </marker>
+  </defs>
+
+  <!-- Canvas -->
+  <rect width="1100" height="660" rx="18" fill="#0b1020"/>
+
+  <!-- ===== VS Code (your machine) ===== -->
+  <rect x="30" y="30" width="520" height="600" rx="14" fill="#101a2e" stroke="#2a3b57" stroke-width="1.5"/>
+  <text x="54" y="64" fill="#e6eefb" font-size="18" font-weight="700">VS Code</text>
+  <text x="130" y="64" fill="#8fa3bf" font-size="14">(your machine)</text>
+
+  <!-- Extension host -->
+  <rect x="50" y="84" width="480" height="330" rx="10" fill="#0e1628" stroke="#24344f"/>
+  <text x="70" y="110" fill="#8fa3bf" font-size="12" font-weight="700" letter-spacing="1.5">EXTENSION HOST (NODE)</text>
+
+  <!-- Hotkey + controller -->
+  <rect x="70" y="124" width="440" height="46" rx="8" fill="#12203a" stroke="#00d8e8" stroke-width="1.4"/>
+  <text x="90" y="152" fill="#00e5ff" font-size="14" font-weight="700">Ctrl+Alt+Space</text>
+  <text x="212" y="152" fill="#8fa3bf" font-size="14">→</text>
+  <text x="232" y="152" fill="#e6eefb" font-size="14" font-weight="700">SessionController</text>
+  <text x="372" y="152" fill="#8fa3bf" font-size="13">(state machine)</text>
+
+  <!-- Component rows -->
+  <g font-size="13.5">
+    <rect x="70" y="182" width="440" height="40" rx="7" fill="#131d33"/>
+    <text x="90" y="207" fill="#e6eefb" font-weight="700">editorContext</text>
+    <text x="232" y="207" fill="#a9b8cf">file · cursor · selection · errors</text>
+
+    <rect x="70" y="228" width="440" height="40" rx="7" fill="#131d33"/>
+    <text x="90" y="253" fill="#e6eefb" font-weight="700">MicRecorder</text>
+    <text x="232" y="253" fill="#a9b8cf">PvRecorder → 16 kHz → 24 kHz PCM</text>
+
+    <rect x="70" y="274" width="440" height="40" rx="7" fill="#1a1631" stroke="#ff5fd8" stroke-width="1.2"/>
+    <text x="90" y="299" fill="#ffffff" font-weight="700">AgentClient</text>
+    <text x="232" y="299" fill="#ffc2f1">paced WebSocket session</text>
+
+    <rect x="70" y="320" width="440" height="40" rx="7" fill="#131d33"/>
+    <text x="90" y="345" fill="#e6eefb" font-weight="700">lineReferences</text>
+    <text x="232" y="345" fill="#a9b8cf">"on line 21" → editor highlight</text>
+
+    <rect x="70" y="366" width="440" height="40" rx="7" fill="#131d33"/>
+    <text x="90" y="391" fill="#e6eefb" font-weight="700">CodeCards</text>
+    <text x="232" y="391" fill="#a9b8cf">Insert at Cursor / Replace lines</text>
+  </g>
+
+  <!-- postMessage link -->
+  <line x1="290" y1="418" x2="290" y2="456" stroke="#8fa3bf" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="302" y="442" fill="#8fa3bf" font-size="12">postMessage</text>
+
+  <!-- Webview -->
+  <rect x="50" y="460" width="480" height="150" rx="10" fill="#0e1628" stroke="#24344f"/>
+  <text x="70" y="486" fill="#8fa3bf" font-size="12" font-weight="700" letter-spacing="1.5">WEBVIEW (BOTTOM PANEL)</text>
+  <rect x="70" y="500" width="440" height="42" rx="7" fill="#131d33"/>
+  <text x="90" y="526" fill="#e6eefb" font-size="13.5" font-weight="700">robot · subtitles · chat log</text>
+  <rect x="70" y="550" width="440" height="42" rx="7" fill="#131d33"/>
+  <text x="90" y="576" fill="#e6eefb" font-size="13.5" font-weight="700">AudioPlayer</text>
+  <text x="232" y="576" fill="#a9b8cf" font-size="13.5">24 kHz PCM → Web Audio</text>
+
+  <!-- ===== AssemblyAI Voice Agent ===== -->
+  <rect x="720" y="200" width="350" height="120" rx="14" fill="#1a1631" stroke="#ff5fd8" stroke-width="1.6"/>
+  <text x="744" y="236" fill="#ff8fe4" font-size="12" font-weight="700" letter-spacing="1.5">ASSEMBLYAI</text>
+  <text x="744" y="264" fill="#ffffff" font-size="20" font-weight="700">Voice Agent API</text>
+  <text x="744" y="292" fill="#c9b8d8" font-size="13">hears · reasons · speaks, in one session</text>
+
+  <!-- WebSocket arrows between AgentClient and Voice Agent -->
+  <path d="M512,287 C620,287 620,248 716,248" fill="none" stroke="#ff5fd8" stroke-width="2" marker-end="url(#arrow-pink)"/>
+  <text x="548" y="208" fill="#ff8fe4" font-size="12.5" font-weight="700">wss</text>
+  <text x="548" y="224" fill="#c9b8d8" font-size="12">mic audio +</text><text x="548" y="240" fill="#c9b8d8" font-size="12">editor context</text>
+  <path d="M716,290 C620,290 620,300 514,300" fill="none" stroke="#ff5fd8" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrow-pink)"/>
+  <text x="548" y="332" fill="#c9b8d8" font-size="12">spoken answer +</text>
+  <text x="548" y="348" fill="#c9b8d8" font-size="12">word-timed transcript</text>
+
+  <!-- ===== Vercel backend ===== -->
+  <rect x="720" y="420" width="350" height="210" rx="14" fill="#101a2e" stroke="#00d8e8" stroke-width="1.6"/>
+  <text x="744" y="454" fill="#00e5ff" font-size="12" font-weight="700" letter-spacing="1.5">VERCEL · NEXT.JS</text>
+  <text x="744" y="482" fill="#ffffff" font-size="20" font-weight="700">EchoCode backend</text>
+  <rect x="744" y="496" width="302" height="30" rx="6" fill="#0b1020" stroke="#2a3b57"/>
+  <text x="758" y="516" fill="#ffd27a" font-size="13" font-weight="700">ASSEMBLYAI_API_KEY</text>
+  <text x="912" y="516" fill="#8fa3bf" font-size="12">never leaves here</text>
+  <g font-size="13" fill="#e6eefb">
+    <text x="744" y="552">• single-use tokens</text>
+    <text x="744" y="576">• code cards <tspan fill="#a9b8cf">(LLM Gateway)</tspan></text>
+    <text x="744" y="600">• usage <tspan fill="#a9b8cf">(Upstash Redis)</tspan></text>
+  </g>
+
+  <!-- HTTPS from extension to backend -->
+  <path d="M532,392 C640,392 620,520 716,520" fill="none" stroke="#00d8e8" stroke-width="2" marker-end="url(#arrow-cyan)"/>
+  <text x="548" y="552" fill="#00e5ff" font-size="12.5" font-weight="700">HTTPS</text>
+  <text x="548" y="568" fill="#a9b8cf" font-size="11.5">/api/token · once per session</text>
+  <text x="548" y="584" fill="#a9b8cf" font-size="11.5">/api/suggest · /api/usage</text>
+  <text x="548" y="600" fill="#a9b8cf" font-size="11.5">after an answer</text>
+
+  <!-- Backend mints token from AssemblyAI -->
+  <line x1="895" y1="418" x2="895" y2="324" stroke="#8fa3bf" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text x="905" y="378" fill="#8fa3bf" font-size="12">mints single-use token</text>
+</svg>
