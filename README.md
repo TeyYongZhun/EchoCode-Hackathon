@@ -83,7 +83,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the right panel; older versions show it in the Explorer) and a microphone. Headphones help. No API key is needed.
 
-1. **Install:** download `echocode-0.1.0.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
+1. **Install:** download `echocode-0.1.1.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
 2. **Open the demo:** download this repository and open its `demo/` folder in VS Code.
 3. **Check your mic:** press **Ctrl+Shift+P** and run **EchoCode: Test Microphone**.
 4. **Ask:** open a demo file, select the code below, click inside the editor, then **hold Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS), ask, and let go. You can also click **🤖 EchoCode** in the status bar instead.
@@ -190,7 +190,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | `extension/` | `npm test` | Unit tests: editor context, line references, subtitles, hotkey handling, audio and resampling |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the window to pick up changes) |
-| `extension/` | `npm run package` | Builds `echocode-0.1.0.vsix` with the microphone library for every platform |
+| `extension/` | `npm run package` | Builds `echocode-0.1.1.vsix` with the microphone library for every platform |
 | `backend/` | `npm run dev` | Runs the backend at http://localhost:3000 |
 | `backend/` | `npm run smoke` | Asks the Voice Agent one question through the backend and reports the reply and latency |
 | `backend/` | `npm run build` | Production build of the backend and landing page |
