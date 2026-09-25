@@ -1,7 +1,10 @@
 /** Level a frame must reach to count as speech, however quiet the room. */
 const SPEECH_MIN_LEVEL = 0.02;
-/** Consecutive loud frames (about 100 ms) before we believe someone is talking. */
-const SPEECH_MIN_FRAMES = 3;
+/**
+ * Loud frames (about 250 ms in total) before we believe someone is talking.
+ * A key click or a bump on the desk is only a frame or three.
+ */
+const SPEECH_MIN_FRAMES = 8;
 /** Levels below this fraction of the loudest speech so far count as silence. */
 const SILENCE_FRACTION_OF_PEAK = 0.12;
 /** Silence can never be louder than this, so a noisy room still ends a turn. */
@@ -33,12 +36,8 @@ export class SilenceDetector {
 
   /** Feeds one frame's level; returns true once the question has ended. */
   push(level: number): boolean {
-    if (level >= SPEECH_MIN_LEVEL) {
-      this.loudFrames++;
-      if (this.loudFrames >= SPEECH_MIN_FRAMES) this.heardSpeech = true;
-    } else {
-      this.loudFrames = 0;
-    }
+    // Counted in total rather than in a row, since speech dips between syllables.
+    if (level >= SPEECH_MIN_LEVEL && ++this.loudFrames >= SPEECH_MIN_FRAMES) this.heardSpeech = true;
     if (this.heardSpeech) this.peak = Math.max(this.peak, level);
     if (!this.heardSpeech || this.silenceMs <= 0) return false;
 

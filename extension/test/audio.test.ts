@@ -39,6 +39,23 @@ test('SilenceDetector never ends a turn before any speech', () => {
   assert.equal(detector.speechDetected, false);
 });
 
+test('SilenceDetector ignores a key click', () => {
+  const detector = new SilenceDetector(FRAME_MS, 1500);
+  feed(detector, 0.003, 300);
+  feed(detector, 0.3, 96); // three loud frames
+  feed(detector, 0.003, 3000);
+  assert.equal(detector.speechDetected, false);
+});
+
+test('SilenceDetector counts choppy speech with gaps between syllables', () => {
+  const detector = new SilenceDetector(FRAME_MS, 1500);
+  for (let i = 0; i < 4; i++) {
+    feed(detector, 0.15, 64);
+    feed(detector, 0.005, 64);
+  }
+  assert.equal(detector.speechDetected, true);
+});
+
 test('SilenceDetector ends the turn after speech then silence', () => {
   const detector = new SilenceDetector(FRAME_MS, 1500);
   assert.equal(feed(detector, 0.2, 1000), false);
