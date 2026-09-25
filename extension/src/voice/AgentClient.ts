@@ -57,8 +57,19 @@ export class AgentClient {
   private replyFallback: NodeJS.Timeout | undefined;
   /** Text of the current reply so far, to space incoming words correctly. */
   private replyText = '';
-  /** AssemblyAI may answer before the hotkey is released; then no nudge is needed. */
-  private repliedThisQuestion = false;
+  /** The system prompt the session started with; editor context is appended to it per question. */
+  private basePrompt = '';
+  /**
+   * True while the hotkey is held. AssemblyAI ends a turn at any complete
+   * sentence, so it may start answering mid-question; while the user is still
+   * holding the key, the reply is kept back here instead of played. If the user
+   * keeps talking, AssemblyAI cancels that reply and answers the whole question.
+   */
+  private holding = false;
+  private held: (() => void)[] = [];
+  private replyActive = false;
+  /** A reply finished while the key was held, so it's the answer; no nudge needed. */
+  private replyCompletedThisQuestion = false;
   private readonly events: AgentClientEvents;
   private readonly log: vscode.LogOutputChannel;
 
@@ -83,6 +94,8 @@ export class AgentClient {
   async connect(ticket: SessionTicket): Promise<void> {
     this.close(false);
     const resumeId = this.canResume ? this.sessionId : undefined;
+    const prompt = ticket.session.system_prompt;
+    this.basePrompt = typeof prompt === 'string' ? prompt : '';
     const socket = new WebSocket(`${ticket.url}?token=${encodeURIComponent(ticket.token)}`);
     this.socket = socket;
     this.ready = false;
@@ -148,14 +161,21 @@ export class AgentClient {
     });
   }
 
-  /** Adds the editor context to the conversation without asking for a reply. */
+  /**
+   * Gives the agent the editor context for the next question. It goes into the
+   * system prompt: tested live, the agent ignored context sent as a conversation
+   * message (system or user role) but uses a system_prompt update straight away.
+   */
   sendContext(text: string): void {
-    this.enqueue({ kind: 'message', payload: { type: 'conversation.message', role: 'system', content: text } });
+    const session = { system_prompt: `${this.basePrompt}\n\n${text}` };
+    this.enqueue({ kind: 'message', payload: { type: 'session.update', session } });
   }
 
-  /** A question starts. AssemblyAI detects turns from the audio itself, so nothing to send. */
+  /** A question starts: hold back any reply until the hotkey is released. */
   startActivity(): void {
-    this.repliedThisQuestion = false;
+    this.holding = true;
+    this.held = [];
+    this.replyCompletedThisQuestion = false;
   }
 
   /** Streams one 16 kHz microphone frame, converted to 24 kHz and paced to real time. */
@@ -165,8 +185,16 @@ export class AgentClient {
     this.enqueue({ kind: 'audio', data, ms: (pcm16k.length / MIC_RATE) * 1000 });
   }
 
-  /** The hotkey was released: close the question and make sure a reply follows. */
+  /**
+   * The hotkey was released. A reply that's already under way plays from its
+   * first word; otherwise a short silence lets turn detection close the
+   * question, with a nudge if no reply starts.
+   */
   endActivity(): void {
+    this.holding = false;
+    const held = this.held;
+    this.held = [];
+    for (const deliver of held) deliver();
     for (let ms = 0; ms < RELEASE_SILENCE_MS; ms += 32) this.enqueue({ kind: 'audio', data: SILENCE_FRAME, ms: 32 });
     this.enqueue({ kind: 'released' });
   }
@@ -178,6 +206,9 @@ export class AgentClient {
     this.ready = false;
     this.stopTimers();
     this.queue = [];
+    this.holding = false;
+    this.held = [];
+    this.replyActive = false;
     if (!socket) return;
     try {
       if (end && socket.readyState === WebSocket.OPEN) {
@@ -194,12 +225,16 @@ export class AgentClient {
     switch (message.type) {
       case 'reply.started':
         clearTimeout(this.replyFallback);
-        this.repliedThisQuestion = true;
+        this.replyActive = true;
         this.replyText = '';
+        // A newer reply supersedes anything kept back from an earlier one.
+        if (this.holding) this.held = [];
         break;
-      case 'reply.audio':
-        if (typeof message.data === 'string') this.events.audio(message.data);
+      case 'reply.audio': {
+        const data = message.data;
+        if (typeof data === 'string') this.deliver(() => this.events.audio(data));
         break;
+      }
       case 'transcript.agent.delta':
         if (typeof message.delta === 'string') this.onAgentWord(message.delta, message.start_ms);
         break;
@@ -207,8 +242,17 @@ export class AgentClient {
         if (typeof message.text === 'string' && message.text.trim()) this.events.inputTranscript(message.text.trim());
         break;
       case 'reply.done':
-        if (message.status === 'interrupted') this.events.interrupted();
-        else this.events.turnComplete();
+        this.replyActive = false;
+        if (message.status === 'interrupted') {
+          // Cancelled because the user kept talking: while holding, just drop it.
+          if (this.holding) this.held = [];
+          else this.events.interrupted();
+        } else if (this.holding) {
+          this.replyCompletedThisQuestion = true;
+          this.held.push(() => this.events.turnComplete());
+        } else {
+          this.events.turnComplete();
+        }
         break;
       case 'session.error':
         this.log.warn(`AssemblyAI error ${String(message.code)}: ${String(message.message)}`);
@@ -216,12 +260,22 @@ export class AgentClient {
     }
   }
 
-  /** Words arrive one at a time; add a space unless the word is punctuation. */
+  /**
+   * Words arrive one at a time, sometimes with their own spaces and sometimes
+   * without; add a space only where one is missing.
+   */
   private onAgentWord(word: string, startMs: unknown): void {
-    const needsSpace = this.replyText.length > 0 && !/^[\s.,!?;:'")\]]/.test(word);
+    const needsSpace = this.replyText.length > 0 && !/\s$/.test(this.replyText) && !/^[\s.,!?;:'")\]]/.test(word);
     const chunk = needsSpace ? ` ${word}` : word;
     this.replyText += chunk;
-    this.events.outputTranscript(chunk, typeof startMs === 'number' ? startMs : null);
+    const timing = typeof startMs === 'number' ? startMs : null;
+    this.deliver(() => this.events.outputTranscript(chunk, timing));
+  }
+
+  /** Passes a reply event on now, or keeps it until the hotkey is released. */
+  private deliver(event: () => void): void {
+    if (this.holding) this.held.push(event);
+    else event();
   }
 
   private enqueue(item: Outgoing): void {
@@ -256,7 +310,8 @@ export class AgentClient {
 
   private armReplyFallback(): void {
     clearTimeout(this.replyFallback);
-    if (this.repliedThisQuestion) return;
+    // A reply is already playing, or one finished while the key was held.
+    if (this.replyActive || this.replyCompletedThisQuestion) return;
     this.replyFallback = setTimeout(() => {
       this.log.info('No reply yet after release; asking for one');
       this.send({ type: 'reply.create' });

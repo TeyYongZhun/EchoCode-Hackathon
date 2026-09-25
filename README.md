@@ -57,7 +57,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 | AssemblyAI product | What it does in EchoCode |
 |---|---|
 | **Voice Agent API** | Runs the whole spoken conversation in one streaming session: it hears the question, reasons over your code and speaks the answer. Coding **key terms** (HashSet, generics, null pointer…) improve recognition, **semantic turn detection** knows when you've finished, **interruptions** are built in, and **word-level timing** drives the live subtitles and line highlights. |
-| **LLM Gateway** | Writes the exact code behind a suggested fix, as structured JSON, using `claude-haiku-4-5-20251001`. It runs after the voice answer, so it never slows the conversation down. |
+| **LLM Gateway** | Writes the exact code behind a suggested fix as JSON, using `qwen3.5-4b-32k-fast` (set `ASSEMBLYAI_SUGGEST_MODEL` to use a stronger model your account has access to). It runs after the voice answer, so it never slows the conversation down. |
 | **Single-use tokens** | Our backend keeps the AssemblyAI API key secret and gives the extension a short-lived token for each conversation. |
 
 ## Architecture

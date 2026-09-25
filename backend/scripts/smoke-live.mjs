@@ -31,8 +31,8 @@ ws.onmessage = (event) => {
     case 'session.ready':
       console.log('Voice Agent session ready. Asking a question...');
       askedAt = Date.now();
-      ws.send(JSON.stringify({ type: 'conversation.message', role: 'user', content: 'In one short sentence, what is a stack data structure?' }));
-      ws.send(JSON.stringify({ type: 'reply.create' }));
+      // A typed question has no audio turn, so ask for the reply directly.
+      ws.send(JSON.stringify({ type: 'reply.create', instructions: 'Answer this question in one short sentence: what is a stack data structure?' }));
       break;
     case 'reply.audio':
       firstAudioMs ??= Date.now() - askedAt;

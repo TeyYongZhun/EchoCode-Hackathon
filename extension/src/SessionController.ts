@@ -387,11 +387,12 @@ export class SessionController implements vscode.Disposable {
       this.view.post({ type: 'error', message: NOTHING_HEARD });
       return;
     }
-    this.live.endActivity();
+    // Reset first: a reply the agent already started plays the moment we release.
     this.activityOpen = false;
     this.endOfSpeechAt = Date.now();
     this.sawAudio = false;
     this.playbackEndsAt = 0;
+    this.live.endActivity();
   }
 
   private async bargeIn(): Promise<void> {
