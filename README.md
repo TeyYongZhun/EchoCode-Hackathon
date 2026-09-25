@@ -57,21 +57,23 @@ EchoCode sits in VS Code's bottom panel, next to the Terminal. VS Code doesn't a
 │    ├─ editorContext   file · cursor · selection · errors │
 │    ├─ MicRecorder     PvRecorder → 16 kHz PCM frames     │
 │    ├─ LiveClient      @google/genai live session ────────┼─ wss ─► Gemini Live (gemini-3.8-live)
-│    └─ tools           suggest_code · highlight_lines     │
+│    ├─ lineReferences  "on line 21" → editor highlight    │
+│    └─ CodeCards       Insert at Cursor / Replace lines   │
 │          ▲ postMessage ▼                                 │
 │ Webview (bottom panel): robot · subtitles · chat log     │
 │    AudioPlayer: 24 kHz PCM → Web Audio                   │
 └──────────────┬───────────────────────────────────────────┘
-               │ HTTPS POST /api/token  (once per session)
+               │ HTTPS: /api/token (once per session), /api/suggest (after an answer)
                ▼
-   Vercel · Next.js route /api/token ── GEMINI_API_KEY ─► mints ephemeral token
+   Vercel · Next.js ── GEMINI_API_KEY ─► ephemeral tokens · code cards (gemini-3.5-flash-lite)
 ```
 
 The extension is a lightweight client. Everything sensitive stays on a small backend deployed on Vercel.
 
 - **The API key never leaves the server.** The Vercel route `/api/token` uses the Gemini key to create a **single-use ephemeral token**. The token expires within minutes and is locked to EchoCode's model and session settings. The extension uses it to open the live session.
 - **Audio goes straight to Google.** Sending every audio packet through our own WebSocket proxy would add a network hop to each one. Vercel's WebSocket support is also still in beta, with a connection cap of about 5 minutes. Ephemeral tokens give the same key protection as a proxy at the latency of a direct connection.
-- **One source of truth for the AI's setup.** The model, voice, system prompt and tool definitions live in the backend (`backend/lib/liveConfig.ts`). The token route sends that setup to the extension, so client and server never disagree.
+- **One source of truth for the AI's setup.** The model, voice and system prompt live in the backend (`backend/lib/liveConfig.ts`). The token route sends that setup to the extension, so client and server never disagree.
+- **The voice model stays fast by doing one job.** Giving the voice model tools made its first word about 2.5 seconds slower and sometimes stalled it, so it only talks. It names lines out loud ("on line twenty-one"), and the extension highlights those lines as they're spoken. When an answer proposes a change, a separate fast text call (`/api/suggest`) writes the exact code for the card, after the voice is already on its way.
 - **Native microphone capture.** VS Code webviews can't use the microphone, so the extension records audio in the extension host with PvRecorder. It produces exactly the format Gemini expects: 16 kHz, 16-bit, mono PCM.
 
 ## Tech stack
@@ -111,7 +113,7 @@ EchoCode is being built during a 3-day hackathon. Each step lands as its own com
 
 **Day 2: It looks like EchoCode**
 - [ ] 5. Robot UI with an audio visualizer, the subtitle bubble, the collapsible chat log and the status bar robot
-- [ ] 6. Code cards with Insert at Cursor (`suggest_code`) and editor line highlights (`highlight_lines`)
+- [ ] 6. Code cards with Insert at Cursor or Replace lines, and editor line highlights that follow the spoken answer
 - [ ] 7. Latency badge, interrupting the AI mid-answer, and friendly error messages
 - [ ] 8. Backend deployed to Vercel
 
@@ -135,8 +137,10 @@ extension/
   test/                         unit tests (node --test)
 backend/
   app/api/token/route.ts        mints single-use ephemeral tokens
+  app/api/suggest/route.ts      writes the code behind an answer, for its code card
   app/api/health/route.ts       status check
   lib/liveConfig.ts             model, voice, system prompt and session settings
+  lib/suggestion.ts             the code-card prompt and JSON schema
   scripts/smoke-live.mjs        end-to-end check without VS Code
 demo/                           Java files used in the live demo
 ```

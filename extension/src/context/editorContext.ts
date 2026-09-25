@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { formatContext, NO_EDITOR_CONTEXT, type EditorSnapshot } from './formatContext';
+import { formatContext, NO_EDITOR_CONTEXT } from './formatContext';
 
 function isCodeEditor(editor: vscode.TextEditor | undefined): editor is vscode.TextEditor {
   return editor !== undefined && editor.document.uri.scheme !== 'output';
@@ -35,21 +35,35 @@ export class EditorTracker implements vscode.Disposable {
   }
 }
 
+/** The whole lines covered by the editor's selection (0-based, inclusive), if anything is selected. */
+function selectedLines(editor: vscode.TextEditor): { startLine: number; endLine: number } | undefined {
+  const selection = editor.selection;
+  if (selection.isEmpty) return undefined;
+  // A selection ending at column 0 doesn't really include that last line.
+  const endsAtLineStart = selection.end.character === 0 && selection.end.line > selection.start.line;
+  return { startLine: selection.start.line, endLine: endsAtLineStart ? selection.end.line - 1 : selection.end.line };
+}
+
+/** What a question was about: the document, and the whole lines selected when it was asked. */
+export interface QuestionTarget {
+  document: vscode.TextDocument;
+  selection?: { startLine: number; endLine: number; text: string };
+}
+
+export function captureTarget(editor: vscode.TextEditor | undefined): QuestionTarget | undefined {
+  if (!editor) return undefined;
+  const lines = selectedLines(editor);
+  if (!lines) return { document: editor.document };
+  const range = new vscode.Range(lines.startLine, 0, lines.endLine, editor.document.lineAt(lines.endLine).text.length);
+  return { document: editor.document, selection: { ...lines, text: editor.document.getText(range) } };
+}
+
 /** Builds the [EDITOR CONTEXT] block for the editor the user is looking at. */
 export function captureEditorContext(editor: vscode.TextEditor | undefined, maxLines: number): string {
   if (!editor) return NO_EDITOR_CONTEXT;
   const document = editor.document;
   const selection = editor.selection;
-
-  let selected: EditorSnapshot['selection'];
-  if (!selection.isEmpty) {
-    // A selection ending at column 0 doesn't really include that last line.
-    const endsAtLineStart = selection.end.character === 0 && selection.end.line > selection.start.line;
-    selected = {
-      startLine: selection.start.line,
-      endLine: endsAtLineStart ? selection.end.line - 1 : selection.end.line,
-    };
-  }
+  const selected = selectedLines(editor);
 
   const diagnostics = vscode.languages
     .getDiagnostics(document.uri)

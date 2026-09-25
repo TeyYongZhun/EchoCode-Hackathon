@@ -1,8 +1,5 @@
 /**
  * A minimal singly linked list, the kind written in a data structures course.
- *
- * Demo scene 3: run it, then select removeLast and ask "Why does this crash?"
- * (With one element, current.next is null, so current.next.next throws.)
  */
 public class LinkedList<T> {
 

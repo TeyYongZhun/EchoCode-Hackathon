@@ -2,7 +2,21 @@
 
 export type SessionState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
+export interface CodeCard {
+  id: string;
+  turnId: number;
+  title: string;
+  language: string;
+  code: string;
+  /** True when inserting replaces the lines that were selected when the question was asked. */
+  replaceSelection: boolean;
+  /** The 1-based lines a replacement covers, for the button label. */
+  replaceLines?: { start: number; end: number };
+}
+
 export type ToWebview =
+  /** Sent once the panel loads: how to describe the hotkey on this platform. */
+  | { type: 'hello'; hotkey: string }
   | { type: 'state'; state: SessionState }
   /** Microphone loudness, 0–1, about 15 times a second while listening. */
   | { type: 'micLevel'; level: number }
@@ -16,6 +30,16 @@ export type ToWebview =
   | { type: 'modelTranscript'; turnId: number; text: string }
   | { type: 'latency'; turnId: number; ms: number }
   | { type: 'turnComplete'; turnId: number }
+  /** The code behind an answer is being prepared. */
+  | { type: 'codePending'; turnId: number }
+  | { type: 'codeSuggestion'; card: CodeCard }
+  /** No code card is coming for this turn. */
+  | { type: 'codeNone'; turnId: number }
   | { type: 'error'; message: string };
 
-export type FromWebview = { type: 'ready' } | { type: 'toggleTalk' } | { type: 'stop' };
+export type FromWebview =
+  | { type: 'ready' }
+  | { type: 'toggleTalk' }
+  | { type: 'stop' }
+  | { type: 'insertCode'; id: string }
+  | { type: 'copyCode'; id: string };

@@ -3,9 +3,6 @@ import java.util.List;
 
 /**
  * Finds student IDs that were submitted more than once.
- *
- * Demo scene 2: select findDuplicates and ask "Why is this so slow with a big list?"
- * (list.contains is a linear scan inside a loop, so this is O(n^2); a HashSet fixes it.)
  */
 public class DuplicateFinder {
 

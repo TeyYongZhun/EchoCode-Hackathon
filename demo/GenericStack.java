@@ -2,9 +2,6 @@ import java.util.NoSuchElementException;
 
 /**
  * A growable stack backed by an array, used to check that brackets are balanced.
- *
- * Demo scene 1: select the class and ask
- * "Walk me through this. Why are we using a generic Stack here?"
  */
 public class GenericStack<T> {
     private T[] items;

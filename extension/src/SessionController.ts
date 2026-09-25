@@ -3,12 +3,16 @@ import { FRAME_MS, MicRecorder } from './audio/MicRecorder';
 import { base64PcmSeconds, pcm16ToBase64, rmsLevel } from './audio/pcm';
 import { SilenceDetector } from './audio/silenceDetector';
 import { readSettings } from './config';
-import { captureEditorContext, type EditorTracker } from './context/editorContext';
+import { captureEditorContext, captureTarget, type EditorTracker, type QuestionTarget } from './context/editorContext';
+import { findLineReferences } from './context/lineReferences';
 import { LiveClient } from './gemini/LiveClient';
+import { fetchSuggestion } from './gemini/suggestionClient';
 import { fetchSessionTicket } from './gemini/tokenProvider';
 import { HotkeyPresses } from './hotkeyPresses';
 import type { SessionState } from './protocol';
 import type { AssistantViewProvider } from './ui/AssistantViewProvider';
+import { CodeCards } from './ui/CodeCards';
+import { LineHighlighter } from './ui/LineHighlighter';
 
 const OUTPUT_SAMPLE_RATE = 24000;
 /** A question can't run longer than this, in case the user forgets to send it. */
@@ -18,6 +22,13 @@ const PLAYBACK_TAIL_MS = 200;
 /** Audio kept from just before speech starts (about half a second), so the first word isn't clipped. */
 const PRE_ROLL_FRAMES = 16;
 const NOTHING_HEARD = "I didn't hear anything. Try again, a little closer to the microphone.";
+/** Show a highlight slightly before the words are heard, since reading lags listening. */
+const HIGHLIGHT_LEAD_MS = 300;
+/** How long the last highlight stays once the answer has finished playing. */
+const HIGHLIGHT_LINGER_MS = 8000;
+/** Answers shorter than this can't describe a code change. */
+const MIN_ANSWER_FOR_CODE = 40;
+const HOTKEY_LABEL = process.platform === 'darwin' ? 'Ctrl+Shift+Space' : 'Ctrl+Alt+Space';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -49,6 +60,13 @@ export class SessionController implements vscode.Disposable {
   private modelText = '';
   /** Editor context captured when this turn started. */
   private turnContext = '';
+  /** The document and selection this turn's question was about. */
+  private turnTarget: QuestionTarget | undefined;
+  /** Line references in the answer that already have a highlight scheduled. */
+  private highlightedRefs = 0;
+  private highlightTimers: NodeJS.Timeout[] = [];
+  private readonly highlighter = new LineHighlighter();
+  private readonly cards: CodeCards;
   /** The editor context Gemini already has, so it's only resent when it changes. */
   private lastContext: string | undefined;
   /** Mic audio not yet sent: captured while connecting or before speech began. */
@@ -80,6 +98,7 @@ export class SessionController implements vscode.Disposable {
     this.editors = editors;
     this.log = log;
     this.installId = installId;
+    this.cards = new CodeCards(editors);
     this.live = new LiveClient(
       {
         audio: (data) => this.onAudio(data),
@@ -92,9 +111,24 @@ export class SessionController implements vscode.Disposable {
       log,
     );
     this.subscription = view.onMessage((msg) => {
-      if (msg.type === 'ready') this.view.post({ type: 'state', state: this.state });
-      if (msg.type === 'toggleTalk') void this.toggleTalk();
-      if (msg.type === 'stop') void this.stop();
+      switch (msg.type) {
+        case 'ready':
+          this.view.post({ type: 'hello', hotkey: HOTKEY_LABEL });
+          this.view.post({ type: 'state', state: this.state });
+          break;
+        case 'toggleTalk':
+          void this.toggleTalk();
+          break;
+        case 'stop':
+          void this.stop();
+          break;
+        case 'insertCode':
+          void this.guardedAction(() => this.cards.insert(msg.id));
+          break;
+        case 'copyCode':
+          void this.guardedAction(() => this.cards.copy(msg.id));
+          break;
+      }
     });
   }
 
@@ -128,6 +162,7 @@ export class SessionController implements vscode.Disposable {
     this.setState('idle');
     this.activityOpen = false;
     this.sessionReady = false;
+    this.clearHighlights();
     await this.mic.stop();
     // Close the open question; the reply is ignored because we're idle.
     if (hadActivity) this.live.endActivity();
@@ -138,6 +173,7 @@ export class SessionController implements vscode.Disposable {
     this.clearTimers();
     void this.mic.stop();
     this.live.close();
+    this.highlighter.dispose();
     this.subscription.dispose();
     this.stateChanged.dispose();
   }
@@ -170,11 +206,23 @@ export class SessionController implements vscode.Disposable {
     }
   }
 
+  /** For panel actions (insert, copy) whose failure shouldn't end the conversation. */
+  private async guardedAction(action: () => Promise<void>): Promise<void> {
+    try {
+      await action();
+    } catch (err) {
+      this.log.error(`Panel action failed: ${errorMessage(err)}`);
+      void vscode.window.showErrorMessage(`EchoCode: ${errorMessage(err)}`);
+    }
+  }
+
   private async startTurn(): Promise<void> {
     const settings = readSettings();
     const editor = this.editors.editor;
     const turn = ++this.turnId;
     this.turnContext = captureEditorContext(editor, settings.maxContextLines);
+    this.turnTarget = captureTarget(editor);
+    this.clearHighlights();
     this.userText = '';
     this.modelText = '';
     this.pendingAudio = [];
@@ -199,7 +247,12 @@ export class SessionController implements vscode.Disposable {
       );
       this.log.info(`Turn ${turn}: recording from "${device}"`);
     } catch (err) {
-      if (turn === this.turnId) this.fail(`Couldn't open the microphone: ${errorMessage(err)}`);
+      if (turn === this.turnId) {
+        this.fail(
+          `Couldn't open the microphone (${errorMessage(err)}). Check that one is connected and that ` +
+            'desktop apps may use it, or pick another with "EchoCode: Choose Microphone".',
+        );
+      }
       return;
     }
     if (turn !== this.turnId) return void this.mic.stop();
@@ -321,6 +374,63 @@ export class SessionController implements vscode.Disposable {
     if (this.state !== 'thinking' && this.state !== 'speaking') return;
     this.modelText += text;
     this.view.post({ type: 'modelTranscript', turnId: this.turnId, text: this.modelText });
+    this.scheduleHighlights(false);
+  }
+
+  /**
+   * Highlights lines as the answer mentions them ("on line twenty-one"). The
+   * transcript runs ahead of playback, so each highlight waits until the audio
+   * received so far has nearly played. Until the answer is complete, a number
+   * at the very end of the text may still be growing ("twenty" → "twenty-one").
+   */
+  private scheduleHighlights(final: boolean): void {
+    const document = this.turnTarget?.document;
+    if (!document) return;
+    const text = this.modelText;
+    const settledLength = text.trimEnd().length;
+    const refs = findLineReferences(text).filter((ref) => final || ref.endOffset < settledLength);
+    const turn = this.turnId;
+    for (const ref of refs.slice(this.highlightedRefs)) {
+      const delay = Math.max(0, this.playbackEndsAt - Date.now() - HIGHLIGHT_LEAD_MS);
+      this.highlightTimers.push(
+        setTimeout(() => {
+          if (turn === this.turnId) this.highlighter.show(document, ref.start, ref.end);
+        }, delay),
+      );
+    }
+    this.highlightedRefs = Math.max(this.highlightedRefs, refs.length);
+  }
+
+  private clearHighlights(): void {
+    for (const timer of this.highlightTimers) clearTimeout(timer);
+    this.highlightTimers = [];
+    this.highlightedRefs = 0;
+    this.highlighter.clear();
+  }
+
+  /** Asks the backend for the code behind the answer, and shows it as a card. */
+  private async requestCodeCard(turn: number): Promise<void> {
+    const answer = this.modelText.trim();
+    const target = this.turnTarget;
+    if (answer.length < MIN_ANSWER_FOR_CODE || !target) return;
+    this.view.post({ type: 'codePending', turnId: turn });
+    const started = Date.now();
+    try {
+      const suggestion = await fetchSuggestion(readSettings().backendUrl, {
+        installId: this.installId,
+        context: this.turnContext,
+        question: this.userText.trim(),
+        answer,
+        languageId: target.document.languageId,
+        selectedCode: target.selection?.text,
+      });
+      this.log.info(`Turn ${turn}: code card ${suggestion ? `"${suggestion.title}"` : 'not needed'} (${Date.now() - started} ms)`);
+      if (suggestion) this.view.post({ type: 'codeSuggestion', card: this.cards.add(turn, suggestion, target) });
+      else this.view.post({ type: 'codeNone', turnId: turn });
+    } catch (err) {
+      this.log.warn(`Turn ${turn}: couldn't get a code card: ${errorMessage(err)}`);
+      this.view.post({ type: 'codeNone', turnId: turn });
+    }
   }
 
   private onTurnComplete(): void {
@@ -328,11 +438,15 @@ export class SessionController implements vscode.Disposable {
     const turn = this.turnId;
     this.view.post({ type: 'turnComplete', turnId: turn });
     this.log.info(`Turn ${turn} complete. You: "${this.userText.trim()}" / EchoCode: "${this.modelText.trim()}"`);
+    this.scheduleHighlights(true);
+    void this.requestCodeCard(turn);
     // Gemini sends audio faster than real time, so wait for playback to finish.
     const wait = Math.max(0, this.playbackEndsAt - Date.now()) + PLAYBACK_TAIL_MS;
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
-      if (turn === this.turnId && (this.state === 'speaking' || this.state === 'thinking')) this.setState('idle');
+      if (turn !== this.turnId) return;
+      this.highlightTimers.push(setTimeout(() => turn === this.turnId && this.highlighter.clear(), HIGHLIGHT_LINGER_MS));
+      if (this.state === 'speaking' || this.state === 'thinking') this.setState('idle');
     }, wait);
   }
 

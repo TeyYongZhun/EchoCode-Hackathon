@@ -51,6 +51,12 @@ export class AudioPlayer {
     this.nextStart = 0;
   }
 
+  /** How much received audio is still waiting to be heard, in milliseconds. */
+  queuedMs(): number {
+    if (!this.context) return 0;
+    return Math.max(0, (this.nextStart - this.context.currentTime) * 1000);
+  }
+
   /** Current output loudness, 0–1, for the visualizer. */
   level(): number {
     if (!this.output) return 0;

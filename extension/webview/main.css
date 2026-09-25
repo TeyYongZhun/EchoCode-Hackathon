@@ -1,161 +1,487 @@
-/* Day 1 panel: functional, theme-aware. The Tron-style robot UI replaces this on Day 2. */
+/* EchoCode panel: a minimal, Tron-like dark stage that stays the same in every theme. */
 :root {
-  --accent: #00d8e8;
-  --speaking: #e040fb;
-  --listening: #00e676;
+  --bg: #070b12;
+  --surface: #0c1422;
+  --surface-2: #0f1a2b;
+  --line: #1c2c42;
+  --text: #d9e6f5;
+  --muted: #7d91a9;
+  --cyan: #00e5ff;
+  --amber: #ffc34d;
+  --magenta: #ff4fd8;
+  --danger: #ff6b86;
+  --accent: var(--cyan);
+  --level: 0;
+  --code-font: var(--vscode-editor-font-family, Consolas, monospace);
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
-  margin: 0;
-  padding: 8px 12px;
-  color: var(--vscode-foreground);
-  background: var(--vscode-panel-background, var(--vscode-editor-background));
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
-}
-
-#app {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  height: calc(100vh - 16px);
-}
-
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--vscode-descriptionForeground);
-}
-
-.state[data-state='connecting'] .dot,
-.state[data-state='thinking'] .dot {
-  background: var(--accent);
-  animation: blink 0.8s infinite alternate;
-}
-
-.state[data-state='listening'] .dot {
-  background: var(--listening);
-}
-
-.state[data-state='speaking'] .dot {
-  background: var(--speaking);
-}
-
-@keyframes blink {
-  to {
-    opacity: 0.3;
-  }
-}
-
-.meter {
-  width: 80px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--vscode-input-background);
-  overflow: hidden;
-}
-
-.meter-fill {
-  display: block;
-  width: 0;
   height: 100%;
-  background: var(--accent);
-  transition: width 60ms linear;
+  margin: 0;
 }
 
-.latency {
-  font-variant-numeric: tabular-nums;
-  color: var(--vscode-descriptionForeground);
+body {
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--vscode-font-family, system-ui, sans-serif);
+  font-size: 13px;
 }
 
 button {
-  padding: 3px 12px;
-  border: none;
-  border-radius: 2px;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
   font: inherit;
   cursor: pointer;
 }
 
-button:hover {
-  background: var(--vscode-button-hoverBackground);
+.app {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* The robot sits at the bottom; the log slides up above it. */
+  height: 100vh;
 }
 
-button.secondary {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
+.app[data-state='listening'],
+.app[data-state='connecting'] {
+  --accent: var(--cyan);
 }
 
-.notice,
-.error {
-  padding: 6px 8px;
-  border-radius: 3px;
-  border-left: 3px solid var(--vscode-editorWarning-foreground);
-  background: var(--vscode-inputValidation-warningBackground);
+.app[data-state='thinking'] {
+  --accent: var(--amber);
 }
 
-.error {
-  border-left-color: var(--vscode-editorError-foreground);
-  background: var(--vscode-inputValidation-errorBackground);
+.app[data-state='speaking'] {
+  --accent: var(--magenta);
 }
+
+/* ---- Stage: robot, subtitle bubble, controls ---- */
+
+.stage {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+}
+
+.app.log-open .stage {
+  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.04), transparent 70%);
+}
+
+.robot {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 229, 255, 0.12), transparent 70%);
+}
+
+.robot:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ring {
+  position: absolute;
+  inset: 4px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: calc(0.15 + var(--level) * 0.85);
+  transform: scale(calc(1 + var(--level) * 0.35));
+  transition: border-color 300ms;
+}
+
+.app[data-state='idle'] .ring {
+  animation: breathe 3.2s ease-in-out infinite;
+}
+
+.app[data-state='thinking'] .ring,
+.app[data-state='connecting'] .ring {
+  border-style: dashed;
+  opacity: 0.8;
+  animation: spin 1.6s linear infinite;
+}
+
+.robot-svg {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 calc(3px + var(--level) * 14px) var(--accent));
+  transition: stroke 300ms;
+}
+
+.robot-svg .head {
+  fill: rgba(0, 229, 255, 0.05);
+}
+
+.robot-svg .visor {
+  fill: rgba(0, 0, 0, 0.55);
+  stroke-width: 1.4;
+}
+
+.robot-svg .eye,
+.robot-svg .antenna-tip {
+  fill: var(--accent);
+  stroke: none;
+}
+
+.robot-svg .eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink 5s infinite;
+}
+
+.app[data-state='thinking'] .robot-svg .eyes,
+.app[data-state='connecting'] .robot-svg .eyes {
+  animation: scan 1.2s ease-in-out infinite alternate;
+}
+
+.robot-svg .mouth {
+  fill: var(--accent);
+  stroke: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scaleY(calc(1 + var(--level) * 3.5));
+}
+
+.bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 12px;
+  background: rgba(12, 20, 34, 0.85);
+  transition: border-color 300ms;
+}
+
+/* The bubble's tail points at the robot. */
+.bubble::before {
+  position: absolute;
+  top: 50%;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  border-bottom: 1px solid rgba(0, 229, 255, 0.28);
+  border-left: 1px solid rgba(0, 229, 255, 0.28);
+  background: var(--surface);
+  content: '';
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.app[data-state='speaking'] .bubble {
+  border-color: rgba(255, 79, 216, 0.45);
+}
+
+.bubble[data-kind='error'] {
+  border-color: rgba(255, 107, 134, 0.6);
+}
+
+.bubble .line {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.bubble[data-kind='hint'] .words {
+  color: var(--muted);
+}
+
+.bubble[data-kind='error'] .words {
+  color: var(--danger);
+}
+
+.speaker {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.bubble .meta {
+  display: flex;
+  gap: 12px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.status {
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.latency {
+  font-variant-numeric: tabular-nums;
+}
+
+.code-note {
+  color: var(--cyan);
+}
+
+.controls {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.controls button {
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.controls button:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.toggle-log {
+  transition: transform 200ms;
+}
+
+.app.log-open .toggle-log {
+  transform: rotate(180deg);
+}
+
+.notice {
+  margin: 0 14px;
+  padding: 6px 10px;
+  border-left: 3px solid var(--amber);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.notice button {
+  border: none;
+  color: var(--cyan);
+  background: none;
+  text-decoration: underline;
+}
+
+/* ---- Conversation log (slides up above the stage) ---- */
 
 .log {
+  display: none;
   flex: 1;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  min-height: 0;
   overflow-y: auto;
 }
 
-.log li {
+.app.log-open .log {
+  display: block;
+  animation: slide-up 220ms ease-out;
+}
+
+.entries {
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  padding: 5px 14px;
+  line-height: 1.5;
+}
+
+.who {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.entry.model .who {
+  color: var(--cyan);
+}
+
+.latency-badge {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.card {
+  margin: 4px 14px 10px 120px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.card.pending {
+  padding: 10px 12px;
+  border-style: dashed;
+  color: var(--muted);
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+
+.card-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.card-title {
+  font-weight: 600;
+}
+
+.card-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.card pre {
+  max-height: 240px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  background: #05080e;
+}
+
+.card code {
+  font-family: var(--code-font);
+  font-size: var(--vscode-editor-font-size, 12px);
+  white-space: pre;
+}
+
+.card-actions {
   display: flex;
   gap: 8px;
-  padding: 4px 0;
-  line-height: 1.45;
+  padding: 8px 12px;
 }
 
-.log .who {
-  flex: none;
-  width: 72px;
+.card-actions button {
+  padding: 4px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 5px;
+  color: #001216;
+  background: var(--cyan);
   font-weight: 600;
-  color: var(--vscode-descriptionForeground);
 }
 
-.log .model .who {
-  color: var(--accent);
+.card-actions button.secondary {
+  color: var(--cyan);
+  background: transparent;
 }
 
-.log .empty {
-  color: var(--vscode-descriptionForeground);
+.card-actions button:disabled {
+  cursor: default;
+  opacity: 0.7;
 }
 
-kbd {
-  padding: 0 4px;
-  border: 1px solid var(--vscode-widget-border, #555);
-  border-radius: 3px;
-  font-family: var(--vscode-editor-font-family);
+/* ---- Narrow placements (e.g. dragged into a side bar) ---- */
+
+@media (max-width: 460px) {
+  .stage {
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .robot {
+    width: 54px;
+    height: 54px;
+  }
+
+  .robot-svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .bubble .line {
+    font-size: 13px;
+  }
+
+  .entry {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .card {
+    margin-left: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---- Motion ---- */
+
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(1);
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes scan {
+  from {
+    transform: translateX(-3px);
+  }
+  to {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.55;
+  }
 }
