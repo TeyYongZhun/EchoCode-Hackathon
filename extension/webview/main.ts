@@ -42,7 +42,7 @@ app.innerHTML = `
     </button>
     <div class="bubble" aria-live="polite">
       <p class="line"><span class="speaker"></span><span class="words"></span></p>
-      <p class="meta"><span class="status">Ready</span><span class="latency"></span><span class="code-note"></span></p>
+      <p class="meta"><span class="status">Ready</span><span class="latency"></span><span class="code-note"></span><span class="quota"></span></p>
     </div>
     <div class="controls">
       <button class="toggle-log" aria-expanded="false" title="Show conversation">^</button>
@@ -61,6 +61,7 @@ const wordsEl = $('.words');
 const statusEl = $('.status');
 const latencyEl = $('.latency');
 const codeNoteEl = $('.code-note');
+const quotaEl = $('.quota');
 const toggleLog = $<HTMLButtonElement>('.toggle-log');
 const notice = $('.notice');
 
@@ -293,6 +294,15 @@ function onMessage(message: ToWebview): void {
       break;
     case 'codeNone':
       removePendingCard(message.turnId);
+      break;
+    case 'usage':
+      if (message.limitSeconds === null) {
+        quotaEl.textContent = 'Pro · unlimited';
+      } else {
+        const minutesLeft = Math.max(0, Math.floor((message.limitSeconds - message.usedSeconds) / 60));
+        quotaEl.textContent = `Free · ${minutesLeft} min left this month`;
+        quotaEl.dataset.low = String(minutesLeft <= 5);
+      }
       break;
     case 'error':
       // Errors stay up until the next conversation instead of fading into the hint.

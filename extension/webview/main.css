@@ -236,6 +236,14 @@ button {
   color: var(--cyan);
 }
 
+.quota {
+  margin-left: auto;
+}
+
+.quota[data-low='true'] {
+  color: var(--amber);
+}
+
 .controls {
   display: flex;
   flex: none;

@@ -1,17 +1,17 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'EchoCode',
-  description: 'The voice-first AI pair programmer for VS Code.',
+  title: 'EchoCode: the voice-first AI pair programmer',
+  description:
+    'Highlight code in VS Code, hold a key and ask out loud. EchoCode explains it back in about a second, powered by Gemini Live.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, background: '#0a0e14', color: '#d7e3f4', fontFamily: 'system-ui, sans-serif' }}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

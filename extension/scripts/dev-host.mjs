@@ -1,5 +1,7 @@
-// `npm run dev`: starts the EchoCode backend if it isn't already running, then
-// opens a VS Code window with EchoCode loaded from source and the demo folder.
+// `npm run dev`: opens a VS Code window with EchoCode loaded from source and the
+// demo folder, after checking the backend is reachable. By default that's the
+// deployed backend; with ECHOCODE_BACKEND_URL=http://localhost:3000 (and the
+// echocode.backendUrl setting to match), a local backend is started if needed.
 // No debugger is involved, so the window can't get stuck waiting for one.
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -7,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 
 const extensionDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoDir = path.resolve(extensionDir, '..');
-const backendUrl = process.env.ECHOCODE_BACKEND_URL ?? 'http://localhost:3000';
+const backendUrl = process.env.ECHOCODE_BACKEND_URL ?? 'https://echo-code-hackathon.vercel.app';
+const isLocalBackend = /^https?:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(backendUrl);
 const dryRun = Boolean(process.env.DRY_RUN);
 const BACKEND_START_TIMEOUT_MS = 60_000;
 
@@ -48,6 +51,8 @@ let backend;
 const status = await backendStatus();
 if (status === 'up') {
   console.log(`Backend is running at ${backendUrl}.`);
+} else if (!isLocalBackend) {
+  console.warn(`! Can't reach the backend at ${backendUrl}. Check your internet connection. Questions will fail until it's reachable.`);
 } else if (status === 'down' && dryRun) {
   console.log(`Backend is not running; would start it with "npm run dev" in backend/.`);
 } else if (status === 'down') {

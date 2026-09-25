@@ -5,6 +5,19 @@
   "version": "0.1.0",
   "publisher": "echocode-hackathon",
   "private": true,
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#070b12",
+    "theme": "dark"
+  },
+  "homepage": "https://echo-code-hackathon.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TeyYongZhun/EchoCode_Hackathon.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TeyYongZhun/EchoCode_Hackathon/issues"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -95,8 +108,8 @@
       "properties": {
         "echocode.backendUrl": {
           "type": "string",
-          "default": "http://localhost:3000",
-          "description": "Base URL of the EchoCode backend that issues Gemini Live session tokens."
+          "default": "https://echo-code-hackathon.vercel.app",
+          "description": "Base URL of the EchoCode backend that issues Gemini Live session tokens. Use http://localhost:3000 to run your own (npm run dev in backend/)."
         },
         "echocode.micDeviceIndex": {
           "type": "integer",
@@ -126,7 +139,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p . && tsc -p webview",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/*.test.ts",
-    "package": "node esbuild.mjs --production && vsce package"
+    "package": "node esbuild.mjs --production && vsce package --skip-license"
   },
   "dependencies": {
     "@picovoice/pvrecorder-node": "^1.2.9"

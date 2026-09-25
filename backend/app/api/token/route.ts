@@ -1,5 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
 import { LIVE_API_VERSION, LIVE_CONFIG, LIVE_MODEL } from '@/lib/liveConfig';
+import {
+  allowTokenRequest,
+  clientIp,
+  FREE_SECONDS_PER_MONTH,
+  getUsage,
+  isOverLimit,
+  isValidInstallId,
+  type Usage,
+} from '@/lib/usage';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +28,38 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: 'The EchoCode backend has no GEMINI_API_KEY configured.' }, { status: 500 });
   }
 
-  const body: unknown = await request.json().catch(() => undefined);
-  const installId = (body as { installId?: unknown } | undefined)?.installId;
-  if (typeof installId !== 'string' || installId.length < 8 || installId.length > 128) {
+  const body = (await request.json().catch(() => undefined)) as
+    | { installId?: unknown; resumeHandle?: unknown }
+    | undefined;
+  const installId = body?.installId;
+  if (!isValidInstallId(installId)) {
     return Response.json({ error: 'Request must include an installId.' }, { status: 400 });
   }
+
+  let usage: Usage | null = null;
+  try {
+    if (!(await allowTokenRequest(installId, clientIp(request)))) {
+      return Response.json({ error: 'Too many sessions started this hour. Try again later.' }, { status: 429 });
+    }
+    usage = await getUsage(installId);
+    if (usage && isOverLimit(usage)) {
+      const freeMinutes = Math.round(FREE_SECONDS_PER_MONTH / 60);
+      return Response.json(
+        {
+          error: `You've used your ${freeMinutes} free minute${freeMinutes === 1 ? '' : 's'} of EchoCode this month. Upgrade to Pro for unlimited voice sessions.`,
+          usage,
+        },
+        { status: 402 },
+      );
+    }
+  } catch (err) {
+    // Metering must never take the product down; let the session through.
+    console.error('Usage check failed, allowing the session:', err);
+  }
+  // A handle from an earlier session lets the new one pick up the same conversation.
+  // Tokens lock every setting, so the handle has to be baked in here, not sent by the client.
+  const resumeHandle = typeof body?.resumeHandle === 'string' && body.resumeHandle.length <= 1024 ? body.resumeHandle : undefined;
+  const config = resumeHandle ? { ...LIVE_CONFIG, sessionResumption: { handle: resumeHandle } } : LIVE_CONFIG;
 
   const now = Date.now();
   const expireTime = new Date(now + TOKEN_LIFETIME_MS).toISOString();
@@ -36,7 +72,7 @@ export async function POST(request: Request): Promise<Response> {
         uses: 1,
         expireTime,
         newSessionExpireTime,
-        liveConnectConstraints: { model: LIVE_MODEL, config: LIVE_CONFIG },
+        liveConnectConstraints: { model: LIVE_MODEL, config },
         httpOptions: { apiVersion: LIVE_API_VERSION },
       },
     });
@@ -46,8 +82,9 @@ export async function POST(request: Request): Promise<Response> {
       token: token.name,
       model: LIVE_MODEL,
       apiVersion: LIVE_API_VERSION,
-      config: LIVE_CONFIG,
+      config,
       expiresAt: expireTime,
+      usage,
     });
   } catch (err) {
     console.error('Failed to create an ephemeral Gemini token:', err);

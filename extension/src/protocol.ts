@@ -35,6 +35,8 @@ export type ToWebview =
   | { type: 'codeSuggestion'; card: CodeCard }
   /** No code card is coming for this turn. */
   | { type: 'codeNone'; turnId: number }
+  /** This month's voice usage, when the backend meters it. */
+  | { type: 'usage'; plan: 'free' | 'pro'; usedSeconds: number; limitSeconds: number | null }
   | { type: 'error'; message: string };
 
 export type FromWebview =

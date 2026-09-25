@@ -1,4 +1,5 @@
 import type { LiveConnectConfig } from '@google/genai';
+import type { Usage } from './usageClient';
 
 /** Everything the extension needs to open one Gemini Live session. */
 export interface SessionTicket {
@@ -8,6 +9,8 @@ export interface SessionTicket {
   apiVersion: string;
   config: LiveConnectConfig;
   expiresAt: string;
+  /** This month's usage; null or missing when the backend doesn't meter. */
+  usage?: Usage | null;
 }
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -23,15 +26,22 @@ function isTicket(value: unknown): value is SessionTicket {
   );
 }
 
-/** Asks the EchoCode backend for a fresh session token. */
-export async function fetchSessionTicket(backendUrl: string, installId: string): Promise<SessionTicket> {
+/**
+ * Asks the EchoCode backend for a fresh session token. Passing the resumption
+ * handle of an earlier session makes the new session continue that conversation.
+ */
+export async function fetchSessionTicket(
+  backendUrl: string,
+  installId: string,
+  resumeHandle?: string,
+): Promise<SessionTicket> {
   const base = backendUrl.replace(/\/+$/, '');
   let response: Response;
   try {
     response = await fetch(`${base}/api/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ installId }),
+      body: JSON.stringify({ installId, resumeHandle }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {

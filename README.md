@@ -115,12 +115,12 @@ EchoCode is being built during a 3-day hackathon. Each step lands as its own com
 - [ ] 5. Robot UI with an audio visualizer, the subtitle bubble, the collapsible chat log and the status bar robot
 - [ ] 6. Code cards with Insert at Cursor or Replace lines, and editor line highlights that follow the spoken answer
 - [ ] 7. Latency badge, interrupting the AI mid-answer, and friendly error messages
-- [ ] 8. Backend deployed to Vercel
+- [x] 8. Backend deployed to Vercel
 
 **Day 3: It's a product**
-- [ ] 9. Session resumption and pre-warmed connections
-- [ ] 10. Freemium quota (30 minutes a month) stored in Upstash Redis
-- [ ] 11. Landing page, packaged VSIX and final README
+- [x] 9. Session resumption (reconnects keep the conversation) and background reconnects while in use
+- [x] 10. Freemium quota (30 minutes a month) and per-hour rate limits, stored in Upstash Redis
+- [ ] 11. Landing page ✓, packaged VSIX ✓, final README (demo GIF still to record)
 - [ ] 12. Demo rehearsal and backup recording
 
 ## Repository layout
@@ -131,16 +131,19 @@ extension/
   src/SessionController.ts      push-to-talk state machine for each question
   src/audio/                    microphone worker thread, levels, silence detection
   src/context/                  builds the [EDITOR CONTEXT] block from the active editor
-  src/gemini/                   session token request and the Gemini Live client
-  src/ui/                       webview panel host
-  webview/                      panel UI and 24 kHz audio playback
+  src/gemini/                   Gemini Live client, and clients for tokens, code cards and usage
+  src/ui/                       panel host, status bar robot, line highlights, code cards
+  webview/                      panel UI: robot, subtitles, chat log, 24 kHz audio playback
   test/                         unit tests (node --test)
 backend/
-  app/api/token/route.ts        mints single-use ephemeral tokens
+  app/page.tsx                  landing page
+  app/api/token/route.ts        mints single-use ephemeral tokens (checks quota and rate limits)
   app/api/suggest/route.ts      writes the code behind an answer, for its code card
+  app/api/usage/route.ts        records the voice minutes each answer used
   app/api/health/route.ts       status check
   lib/liveConfig.ts             model, voice, system prompt and session settings
   lib/suggestion.ts             the code-card prompt and JSON schema
+  lib/usage.ts                  freemium metering in Upstash Redis
   scripts/smoke-live.mjs        end-to-end check without VS Code
 demo/                           Java files used in the live demo
 ```
@@ -152,33 +155,22 @@ You'll need:
 - Node.js 22.18 or later (24 recommended)
 - VS Code 1.95 or later
 - A microphone, ideally with headphones
-- A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey). The free tier is enough.
 
-**1. Start the backend.** It holds your API key and hands out short-lived session tokens.
+The extension uses the deployed backend at **https://echo-code-hackathon.vercel.app** by default, so you don't need a Gemini key to try it.
 
-```bash
-cd backend
-npm install
-cp .env.example .env.local   # then put your key in GEMINI_API_KEY
-npm run dev                  # serves http://localhost:3000
-```
+**Just want to try it?** Download `echocode-0.1.0.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…**, pick the file, then open the `demo/` folder and follow step 2 below.
 
-To check the whole path to Gemini without VS Code or a microphone, run `npm run smoke` in a second terminal. It asks Gemini one question and prints the reply and its latency.
-
-**2. Run the extension.**
+**1. Run the extension from source.**
 
 ```bash
 cd extension
 npm install
-```
-
-```bash
 npm run dev
 ```
 
-This builds EchoCode, starts the backend if it isn't already running, and opens a VS Code window on the `demo/` folder with the extension loaded. Keep the terminal open: it shows the backend's logs, and **Ctrl+C** stops it. (**Run EchoCode** from the Run and Debug view opens the same window with the debugger attached, but doesn't start the backend.)
+This builds EchoCode, checks that the backend is reachable, and opens a VS Code window on the `demo/` folder with the extension loaded. (**Run EchoCode** from the Run and Debug view opens the same window with the debugger attached.)
 
-**3. Talk to it.**
+**2. Talk to it.**
 
 1. In the new window, run **EchoCode: Test Microphone** from the Command Palette. If it reports silence, run **EchoCode: Choose Microphone**.
 2. Open `GenericStack.java`, select the `push` method and ask *"Walk me through this method."* To talk, either:
@@ -188,6 +180,19 @@ This builds EchoCode, starts the backend if it isn't already running, and opens 
 
 The **EchoCode** output channel logs every step, including connection time and the latency of each answer.
 
+**Running your own backend (optional).** You'll need a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey); the free tier is enough.
+
+```bash
+cd backend
+npm install
+cp .env.example .env.local   # then put your key in GEMINI_API_KEY
+npm run dev                  # serves http://localhost:3000
+```
+
+Set `echocode.backendUrl` to `http://localhost:3000` in VS Code settings. From `extension/`, run `ECHOCODE_BACKEND_URL=http://localhost:3000 npm run dev` to have the launcher start the local backend for you. `npm run smoke` in `backend/` checks the whole path to Gemini without VS Code or a microphone.
+
+To deploy your own on Vercel, import the repository, set **Root Directory** to `backend` and **Framework Preset** to Next.js, and add `GEMINI_API_KEY` as an environment variable. To switch on the free-tier quota, add **Upstash Redis** from the Vercel Marketplace to the project and redeploy. Without it, usage isn't metered and nothing is blocked. The other options are listed in `backend/.env.example`.
+
 **Useful commands**
 
 | Where | Command | What it does |
@@ -195,12 +200,13 @@ The **EchoCode** output channel logs every step, including connection time and t
 | `extension/` | `npm test` | Unit tests for context building and audio helpers |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the Development Host to pick up changes) |
-| `backend/` | `npm run build` | Production build of the backend |
+| `extension/` | `npm run package` | Builds `echocode-0.1.0.vsix`, including the native microphone library for Windows, macOS and Linux |
+| `backend/` | `npm run build` | Production build of the backend and landing page |
 
-**Settings** (search "EchoCode" in Settings): `echocode.backendUrl` (default `http://localhost:3000`), `echocode.micDeviceIndex`, `echocode.maxContextLines` and `echocode.autoStopSilenceMs`.
+**Settings** (search "EchoCode" in Settings): `echocode.backendUrl` (default `https://echo-code-hackathon.vercel.app`), `echocode.micDeviceIndex`, `echocode.maxContextLines` and `echocode.autoStopSilenceMs`.
 
 ## Presentation and judging
 
 - **Live demo.** There are three scenes. First, a walkthrough of a generic `Stack<T>`, with lines highlighted as the AI speaks. Second, *"Why is this slow?"*, which leads to an `ArrayList` → `HashSet` fix inserted with one click. Third, *"Why does this crash?"*, about a null pointer in a linked list. Every answer shows its measured latency.
-- **Try it yourself.** Judges get the packaged extension (`.vsix`) and the `demo/` folder. EchoCode runs in desktop VS Code, including desktop VS Code connected to a GitHub Codespace, because the extension always runs on your own machine where the microphone is. Browser-only editors such as vscode.dev can't reach a local microphone.
+- **Try it yourself.** The landing page is at https://echo-code-hackathon.vercel.app. Judges install the packaged extension (`.vsix`) from the GitHub release and open the `demo/` folder. EchoCode runs in desktop VS Code, including desktop VS Code connected to a GitHub Codespace, because the extension always runs on your own machine where the microphone is. Browser-only editors such as vscode.dev can't reach a local microphone.
 - **Commit history.** EchoCode was built solo during the event, and each step of the build plan above is a separate commit.

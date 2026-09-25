@@ -15,11 +15,15 @@ export interface LiveClientEvents {
   interrupted(): void;
   /** The session ended; the next question needs a new connection. */
   closed(reason: string): void;
+  /** Gemini will close this connection soon (connections have a time limit). */
+  goAway(): void;
 }
 
 /** A thin wrapper around one Gemini Live session opened with an ephemeral token. */
 export class LiveClient {
   private session: Session | undefined;
+  /** Lets a later session resume this conversation (see the token route). */
+  private handle: string | undefined;
   private readonly events: LiveClientEvents;
   private readonly log: vscode.LogOutputChannel;
 
@@ -30,6 +34,15 @@ export class LiveClient {
 
   get isOpen(): boolean {
     return this.session !== undefined;
+  }
+
+  /** The latest handle for resuming this conversation in a new session, if Gemini has offered one. */
+  get resumeHandle(): string | undefined {
+    return this.handle;
+  }
+
+  forgetResumeHandle(): void {
+    this.handle = undefined;
   }
 
   /** Opens the session and resolves once Gemini has accepted the setup. */
@@ -133,6 +146,11 @@ export class LiveClient {
       if (content.outputTranscription?.text) this.events.outputTranscript(content.outputTranscription.text);
       if (content.turnComplete) this.events.turnComplete();
     }
-    if (message.goAway) this.log.warn(`Gemini will end this session in ${message.goAway.timeLeft ?? 'a moment'}`);
+    const update = message.sessionResumptionUpdate;
+    if (update?.resumable && update.newHandle) this.handle = update.newHandle;
+    if (message.goAway) {
+      this.log.info(`Gemini will end this connection in ${message.goAway.timeLeft ?? 'a moment'}`);
+      this.events.goAway();
+    }
   }
 }
