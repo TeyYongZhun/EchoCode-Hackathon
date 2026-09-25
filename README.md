@@ -105,9 +105,9 @@ EchoCode is being built during a 3-day hackathon. Each step lands as its own com
 **Day 1: It talks**
 - [x] 0. Project README: pitch, architecture and plan
 - [x] 1. Scaffold the extension (esbuild) and the backend (Next.js), plus the demo files
-- [ ] 2. `/api/token` creates ephemeral tokens
-- [ ] 3. Microphone check: PvRecorder recording inside VS Code
-- [ ] 4. Voice loop: hotkey, then context and mic audio to Gemini Live, then a spoken answer
+- [x] 2. `/api/token` creates ephemeral tokens
+- [x] 3. Microphone check: PvRecorder recording inside VS Code
+- [x] 4. Voice loop: hotkey, then context and mic audio to Gemini Live, then a spoken answer
 
 **Day 2: It looks like EchoCode**
 - [ ] 5. Robot UI with an audio visualizer, the subtitle bubble, the collapsible chat log and the status bar robot
