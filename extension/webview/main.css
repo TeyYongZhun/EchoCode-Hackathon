@@ -85,11 +85,6 @@ button {
   background: radial-gradient(circle at 50% 45%, rgba(0, 229, 255, 0.12), transparent 70%);
 }
 
-.robot:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
-}
-
 .ring {
   position: absolute;
   inset: 4px;
@@ -406,7 +401,7 @@ button {
   opacity: 0.7;
 }
 
-/* ---- Narrow placements (e.g. dragged into a side bar) ---- */
+/* ---- Narrow placements (the right panel) ---- */
 
 @media (max-width: 460px) {
   .stage {

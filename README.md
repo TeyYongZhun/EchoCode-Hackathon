@@ -81,7 +81,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 ## Try it
 
-You need desktop VS Code (1.95 or later) and a microphone. Headphones help. No API key is needed.
+You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the right panel; older versions show it in the Explorer) and a microphone. Headphones help. No API key is needed.
 
 1. **Install:** download `echocode-0.1.0.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
 2. **Open the demo:** download this repository and open its `demo/` folder in VS Code.
@@ -94,7 +94,7 @@ You need desktop VS Code (1.95 or later) and a microphone. Headphones help. No A
 | `DuplicateFinder.java` | the `findDuplicates` method | *"Why is this so slow with a big list? How do I fix it?"* Then click **Replace lines** on the code card. |
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
 
-The answer plays in the **EchoCode** tab of the bottom panel (**Ctrl+J**). Click **^** there to see the full conversation and code cards.
+The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. Click **^** there to hide or show the conversation.
 
 ## Tech stack
 
