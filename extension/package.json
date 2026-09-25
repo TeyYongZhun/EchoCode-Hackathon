@@ -41,7 +41,7 @@
   ],
   "contributes": {
     "viewsContainers": {
-      "panel": [
+      "secondarySidebar": [
         {
           "id": "echocode",
           "title": "EchoCode",
@@ -138,7 +138,7 @@
     "dev": "node esbuild.mjs && node scripts/dev-host.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc -p . && tsc -p webview",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/*.test.ts",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./test/resolveTs.mjs --test test/*.test.ts",
     "package": "node esbuild.mjs --production && vsce package --skip-license"
   },
   "dependencies": {

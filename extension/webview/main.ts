@@ -37,9 +37,9 @@ app.innerHTML = `
   </section>
   <div class="notice" hidden>Your browser paused audio. <button class="unlock">Enable voice</button></div>
   <section class="stage">
-    <button class="robot" aria-label="Talk to EchoCode">
+    <div class="robot" role="img" aria-label="EchoCode">
       <span class="ring"></span>${ROBOT_SVG}
-    </button>
+    </div>
     <div class="bubble" aria-live="polite">
       <p class="line"><span class="speaker"></span><span class="words"></span></p>
       <p class="meta"><span class="status">Ready</span><span class="latency"></span><span class="code-note"></span><span class="quota"></span></p>
@@ -54,7 +54,6 @@ app.innerHTML = `
 const $ = <T extends HTMLElement>(selector: string) => app.querySelector<T>(selector)!;
 const entries = $<HTMLOListElement>('.entries');
 const log = $('.log');
-const robot = $<HTMLButtonElement>('.robot');
 const bubble = $('.bubble');
 const speakerEl = $('.speaker');
 const wordsEl = $('.words');
@@ -85,7 +84,7 @@ function setBubble(words: string, speaker: 'You' | 'EchoCode' | '' = '', kind: '
 }
 
 function showHint(): void {
-  setBubble(`Hold ${hotkey} (or click me) and ask about your code.`, '', 'hint');
+  setBubble(`Hold ${hotkey} and ask about your code.`, '', 'hint');
 }
 
 /** Shows the answer's subtitle once the audio before it has played. */
@@ -222,7 +221,6 @@ function onState(next: SessionState): void {
   state = next;
   app.dataset.state = next;
   statusEl.textContent = STATUS[next];
-  robot.setAttribute('aria-label', next === 'listening' ? 'Send your question' : 'Talk to EchoCode');
   window.clearTimeout(lingerTimer);
   switch (next) {
     case 'connecting':
@@ -249,7 +247,6 @@ function onMessage(message: ToWebview): void {
   switch (message.type) {
     case 'hello':
       hotkey = message.hotkey;
-      robot.title = `Talk (${hotkey})`;
       if (state === 'idle' && !showingError) showHint();
       break;
     case 'state':
@@ -274,14 +271,20 @@ function onMessage(message: ToWebview): void {
     case 'modelTranscript':
       latestTurn = Math.max(latestTurn, message.turnId);
       setEntryText(message.turnId, 'model', message.text);
-      scheduleSubtitle(message.turnId, message.text);
+      // Empty when a reply was cut short and a new one is coming.
+      if (message.text.trim()) scheduleSubtitle(message.turnId, message.text);
       break;
     case 'latency': {
       latencyEl.textContent = `⚡ ${message.ms} ms`;
-      const badge = document.createElement('span');
-      badge.className = 'latency-badge';
+      const who = entry(message.turnId, 'model').querySelector('.who')!;
+      // A reply that was cut short and replaced reports its latency again.
+      let badge = who.querySelector('.latency-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'latency-badge';
+        who.append(badge);
+      }
       badge.textContent = `⚡ ${message.ms} ms`;
-      entry(message.turnId, 'model').querySelector('.who')!.append(badge);
       break;
     }
     case 'turnComplete':
@@ -316,16 +319,16 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => onMessage
 
 // ---- User actions ---------------------------------------------------------
 
-robot.addEventListener('click', () => {
-  void player.unlock();
-  vscode.postMessage({ type: 'toggleTalk' });
-});
-$('.stop').addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
-toggleLog.addEventListener('click', () => setLogOpen(!app.classList.contains('log-open')));
-$('.unlock').addEventListener('click', async () => {
+async function unlockAudio(): Promise<void> {
   await player.unlock();
   notice.hidden = !player.blocked;
-});
+}
+
+// Any click in the panel lets the browser play audio, in case it's holding it back.
+app.addEventListener('pointerdown', () => void unlockAudio());
+$('.stop').addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
+toggleLog.addEventListener('click', () => setLogOpen(!app.classList.contains('log-open')));
+$('.unlock').addEventListener('click', () => void unlockAudio());
 entries.addEventListener('click', (event) => {
   const button = (event.target as HTMLElement).closest('button');
   const id = button?.closest<HTMLElement>('.card')?.dataset.id;
@@ -351,6 +354,6 @@ function animate(): void {
 }
 requestAnimationFrame(animate);
 
-setLogOpen(vscode.getState()?.logOpen ?? false);
+setLogOpen(vscode.getState()?.logOpen ?? true);
 showHint();
 vscode.postMessage({ type: 'ready' });

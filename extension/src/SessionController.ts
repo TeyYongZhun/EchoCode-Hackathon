@@ -37,6 +37,9 @@ const MIN_WARM_INTERVAL_MS = 60_000;
 const IDLE_CLOSE_MS = 3 * 60_000;
 /** The panel starts playing a reply's first chunk about this long after it arrives. */
 const PLAYBACK_START_DELAY_MS = 50;
+/** Give up on a question if its answer hasn't started this long after it was sent. */
+const REPLY_TIMEOUT_MS = 20_000;
+const NO_REPLY = "EchoCode didn't answer that time. Please ask again.";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -91,6 +94,7 @@ export class SessionController implements vscode.Disposable {
   private playbackEndsAt = 0;
   private idleTimer: NodeJS.Timeout | undefined;
   private questionTimer: NodeJS.Timeout | undefined;
+  private replyTimer: NodeJS.Timeout | undefined;
   /** The connection attempt in progress, shared by a question and a background reconnect. */
   private connecting: Promise<void> | undefined;
   private idleCloseTimer: NodeJS.Timeout | undefined;
@@ -135,9 +139,6 @@ export class SessionController implements vscode.Disposable {
           this.view.post({ type: 'hello', hotkey: HOTKEY_LABEL });
           this.view.post({ type: 'state', state: this.state });
           break;
-        case 'toggleTalk':
-          void this.toggleTalk();
-          break;
         case 'stop':
           void this.stop();
           break;
@@ -156,7 +157,7 @@ export class SessionController implements vscode.Disposable {
   }
 
   /**
-   * The hotkey, status bar robot and panel button all land here. Tap to start
+   * The hotkey and the status bar item both land here. Tap to start
    * and tap to send, or hold the hotkey while talking and let go to send.
    */
   async toggleTalk(): Promise<void> {
@@ -178,14 +179,15 @@ export class SessionController implements vscode.Disposable {
     const hadActivity = this.activityOpen;
     this.turnId++;
     this.clearTimers();
+    this.view.post({ type: 'flushAudio' });
     this.setState('idle');
     this.activityOpen = false;
     this.sessionReady = false;
     this.clearHighlights();
-    await this.mic.stop();
-    // Close the open question; the reply is ignored because we're idle.
+    // Close the open question so it isn't joined to the next one, then drop any answer to it.
     if (hadActivity) this.live.endActivity();
-    this.view.post({ type: 'flushAudio' });
+    this.live.cancelReply();
+    await this.mic.stop();
   }
 
   dispose(): void {
@@ -392,12 +394,24 @@ export class SessionController implements vscode.Disposable {
     this.endOfSpeechAt = Date.now();
     this.sawAudio = false;
     this.playbackEndsAt = 0;
+    this.armReplyTimeout();
     this.live.endActivity();
   }
 
+  private armReplyTimeout(): void {
+    clearTimeout(this.replyTimer);
+    const turn = this.turnId;
+    this.replyTimer = setTimeout(() => {
+      if (turn === this.turnId && this.state === 'thinking') this.fail(NO_REPLY);
+    }, REPLY_TIMEOUT_MS);
+  }
+
+  /** Talk pressed while EchoCode is answering: silence it now and take a new question. */
   private async bargeIn(): Promise<void> {
     this.clearTimers();
     this.view.post({ type: 'flushAudio' });
+    // The server can't be told to stop, so the rest of this answer is dropped as it arrives.
+    this.live.cancelReply();
     this.playbackEndsAt = 0;
     await this.startTurn();
   }
@@ -431,6 +445,7 @@ export class SessionController implements vscode.Disposable {
       const ms = Date.now() - this.endOfSpeechAt;
       this.log.info(`Turn ${this.turnId}: first audio after ${ms} ms`);
       this.view.post({ type: 'latency', turnId: this.turnId, ms });
+      clearTimeout(this.replyTimer);
       this.setState('speaking');
     }
     this.view.post({ type: 'audio', data });
@@ -453,12 +468,26 @@ export class SessionController implements vscode.Disposable {
     this.scheduleHighlights(false);
   }
 
-  /** The agent stopped mid-answer because the user spoke over it. */
+  /**
+   * The agent cut its reply short because it heard more of the question: it
+   * started answering at a pause, before the rest of the audio arrived. That
+   * reply is dropped and the answer to the whole question follows.
+   */
   private onInterrupted(): void {
     this.view.post({ type: 'flushAudio' });
     this.playbackEndsAt = 0;
-    // Normally a new question is already under way; if not, finish this turn.
-    if (this.state === 'thinking' || this.state === 'speaking') this.onTurnComplete();
+    if (this.state !== 'thinking' && this.state !== 'speaking') return;
+    this.log.info(`Turn ${this.turnId}: reply cut short; waiting for the answer to the whole question`);
+    clearTimeout(this.idleTimer);
+    if (this.modelText) this.view.post({ type: 'modelTranscript', turnId: this.turnId, text: '' });
+    this.modelText = '';
+    this.wordTimes = [];
+    this.replyPlaysAt = 0;
+    // Latency is reported again for the reply that's actually heard.
+    this.sawAudio = false;
+    this.clearHighlights();
+    this.setState('thinking');
+    this.armReplyTimeout();
   }
 
   /**
@@ -570,6 +599,7 @@ export class SessionController implements vscode.Disposable {
     this.clearTimers();
     this.sessionReady = false;
     this.activityOpen = false;
+    this.live.cancelReply();
     void this.mic.stop();
     this.setState('idle');
     this.view.post({ type: 'error', message });
@@ -589,5 +619,6 @@ export class SessionController implements vscode.Disposable {
   private clearTimers(): void {
     clearTimeout(this.idleTimer);
     clearTimeout(this.questionTimer);
+    clearTimeout(this.replyTimer);
   }
 }

@@ -68,6 +68,12 @@ export class AgentClient {
   private holding = false;
   private held: (() => void)[] = [];
   private replyActive = false;
+  /**
+   * The reply in progress answers a question the user has moved on from
+   * (stopped, or asked something new over it). The server can't be told to
+   * cancel it, so the rest of it is dropped here until the next reply starts.
+   */
+  private discarding = false;
   /** A reply finished while the key was held, so it's the answer; no nudge needed. */
   private replyCompletedThisQuestion = false;
   private readonly events: AgentClientEvents;
@@ -173,6 +179,8 @@ export class AgentClient {
 
   /** A question starts: hold back any reply until the hotkey is released. */
   startActivity(): void {
+    // A reply still arriving now answers an earlier question.
+    if (this.replyActive) this.discarding = true;
     this.holding = true;
     this.held = [];
     this.replyCompletedThisQuestion = false;
@@ -199,6 +207,18 @@ export class AgentClient {
     this.enqueue({ kind: 'released' });
   }
 
+  /**
+   * The user stopped the conversation or interrupted the answer: drop the rest
+   * of the reply in progress, and don't ask for one to a question just closed.
+   */
+  cancelReply(): void {
+    clearTimeout(this.replyFallback);
+    this.queue = this.queue.filter((item) => item.kind !== 'released');
+    if (this.replyActive) this.discarding = true;
+    this.holding = false;
+    this.held = [];
+  }
+
   /** Closes the session. `end` also tells AssemblyAI it's over, so it can't be resumed. */
   close(end = true): void {
     const socket = this.socket;
@@ -209,6 +229,7 @@ export class AgentClient {
     this.holding = false;
     this.held = [];
     this.replyActive = false;
+    this.discarding = false;
     if (!socket) return;
     try {
       if (end && socket.readyState === WebSocket.OPEN) {
@@ -226,27 +247,36 @@ export class AgentClient {
       case 'reply.started':
         clearTimeout(this.replyFallback);
         this.replyActive = true;
+        this.discarding = false;
+        this.replyCompletedThisQuestion = false;
         this.replyText = '';
         // A newer reply supersedes anything kept back from an earlier one.
         if (this.holding) this.held = [];
         break;
       case 'reply.audio': {
         const data = message.data;
-        if (typeof data === 'string') this.deliver(() => this.events.audio(data));
+        if (typeof data === 'string' && !this.discarding) this.deliver(() => this.events.audio(data));
         break;
       }
       case 'transcript.agent.delta':
-        if (typeof message.delta === 'string') this.onAgentWord(message.delta, message.start_ms);
+        if (typeof message.delta === 'string' && !this.discarding) this.onAgentWord(message.delta, message.start_ms);
         break;
       case 'transcript.user':
         if (typeof message.text === 'string' && message.text.trim()) this.events.inputTranscript(message.text.trim());
         break;
       case 'reply.done':
         this.replyActive = false;
-        if (message.status === 'interrupted') {
-          // Cancelled because the user kept talking: while holding, just drop it.
-          if (this.holding) this.held = [];
-          else this.events.interrupted();
+        if (this.discarding) {
+          this.discarding = false;
+        } else if (message.status === 'interrupted') {
+          // Cancelled because the agent heard more of the question. While
+          // holding, just drop it; after release, a new reply follows.
+          if (this.holding) {
+            this.held = [];
+          } else {
+            this.events.interrupted();
+            this.armReplyFallback();
+          }
         } else if (this.holding) {
           this.replyCompletedThisQuestion = true;
           this.held.push(() => this.events.turnComplete());

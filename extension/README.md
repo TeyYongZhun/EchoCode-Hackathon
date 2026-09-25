@@ -8,8 +8,8 @@ Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gate
 
 1. Select the code you're curious about.
 2. **Hold `Ctrl+Alt+Space`** (`Ctrl+Shift+Space` on macOS), ask your question and let go. You can also tap the key or click **EchoCode** in the status bar, speak, and tap again.
-3. Listen. The answer plays in the **EchoCode** panel at the bottom of the window, with live subtitles, and the lines it mentions light up in your editor.
-4. When it proposes a change, click **^** to open the conversation and use **Replace lines** or **Insert at Cursor** on the code card.
+3. Listen. The answer plays in the **EchoCode** tab of the right panel, with live subtitles, and the lines it mentions light up in your editor.
+4. When it proposes a change, use **Replace lines** or **Insert at Cursor** on the code card in the conversation.
 
 Press the key while EchoCode is talking to interrupt it with a new question.
 

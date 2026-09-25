@@ -41,7 +41,6 @@ export type ToWebview =
 
 export type FromWebview =
   | { type: 'ready' }
-  | { type: 'toggleTalk' }
   | { type: 'stop' }
   | { type: 'insertCode'; id: string }
   | { type: 'copyCode'; id: string };
