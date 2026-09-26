@@ -16,6 +16,8 @@ interface Harness {
   sent: string[];
   /** Sends events as the Voice Agent would, and waits until the client has handled them. */
   serverSends(...messages: object[]): Promise<void>;
+  /** Like serverSends, without the user transcript it uses to sync (for tests about transcripts). */
+  serverSendsOnly(...messages: object[]): Promise<void>;
   close(): void;
 }
 
@@ -64,6 +66,10 @@ async function connect(): Promise<Harness> {
         serverSocket!.send(JSON.stringify(message));
       }
       await handled;
+    },
+    async serverSendsOnly(...messages) {
+      for (const message of messages) serverSocket!.send(JSON.stringify(message));
+      await sleep(50);
     },
     close() {
       client.close();
@@ -186,14 +192,29 @@ test('an empty answer after interrupting is not taken as the answer: EchoCode as
     h.client.cancelReply();
     h.client.startActivity();
     h.client.endActivity();
-    // The old reply is cut off, then a reply with no words or audio arrives.
+    // The old reply is cut off, then a reply with no words or audio arrives, and nothing after it.
     await h.serverSends(interrupted, started, completed);
     assert.deepEqual(h.seen, ['audio:a1'], 'an empty reply does not end the question');
-    await sleep(50);
+    await sleep(1800);
     assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
     // The real answer then plays as usual.
     await h.serverSends(started, audio('b1'), word('Here.'), completed);
     assert.deepEqual(h.seen, ['audio:a1', 'audio:b1', 'word:Here.', 'done']);
+  } finally {
+    h.close();
+  }
+});
+
+test('an empty reply followed straight away by the real answer is left alone', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    h.client.endActivity();
+    // As tested live: AssemblyAI drops an early reply empty and starts the real one.
+    await h.serverSends(started, completed, started, audio('b1'), word('Line'), completed);
+    assert.deepEqual(h.seen, ['audio:b1', 'word:Line', 'done']);
+    await sleep(1800);
+    assert.ok(!h.sent.includes('reply.create'), 'asking again would cut the real answer off');
   } finally {
     h.close();
   }
@@ -204,9 +225,12 @@ test('a second empty answer ends the question instead of asking forever', async 
   try {
     h.client.startActivity();
     h.client.endActivity();
-    await h.serverSends(started, completed, started, completed);
+    await h.serverSends(started, completed);
+    await sleep(1800);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+    await h.serverSends(started, completed);
+    await sleep(1800);
     assert.deepEqual(h.seen, ['done']);
-    await sleep(50);
     assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
   } finally {
     h.close();
@@ -221,6 +245,90 @@ test('an empty answer while the key is held is ignored, and release asks for a r
     h.client.endActivity();
     assert.deepEqual(h.seen, []);
     await sleep(1800);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+  } finally {
+    h.close();
+  }
+});
+
+test('an answer whose words never arrived one by one still shows its full text', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    h.client.endActivity();
+    await h.serverSends(started, audio('b1'), { type: 'transcript.agent', text: 'Line 34 is the problem.' }, completed);
+    assert.deepEqual(h.seen, ['audio:b1', 'word:Line 34 is the problem.', 'done']);
+    // Normally the words came first, so the full text isn't added again.
+    h.client.startActivity();
+    h.client.endActivity();
+    await h.serverSends(started, word('Yes.'), { type: 'transcript.agent', text: 'Yes.' }, completed);
+    assert.deepEqual(h.seen.slice(3), ['word:Yes.', 'done']);
+  } finally {
+    h.close();
+  }
+});
+
+test('an answer still arriving is in progress, until it is dropped or done', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    h.client.endActivity();
+    assert.equal(h.client.replyInProgress, false);
+    await h.serverSends(started, audio('a1'));
+    assert.equal(h.client.replyInProgress, true, 'interrupting now must end the session');
+    h.client.cancelReply();
+    assert.equal(h.client.replyInProgress, false, 'an answer being dropped is not in progress');
+    await h.serverSends(completed, started, audio('b1'));
+    assert.equal(h.client.replyInProgress, true);
+    await h.serverSends(completed);
+    assert.equal(h.client.replyInProgress, false);
+  } finally {
+    h.close();
+  }
+});
+
+test('no answer is asked for while AssemblyAI is still hearing the question', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    await h.serverSendsOnly({ type: 'input.speech.started' });
+    h.client.endActivity();
+    // Queued question audio is still being worked through: asking now would get an empty answer.
+    await sleep(1800);
+    assert.ok(!h.sent.includes('reply.create'));
+    // Once the question's transcript arrives, the usual nudge applies.
+    await h.serverSendsOnly({ type: 'input.speech.stopped' }, { type: 'transcript.user', text: 'Why does it crash?' });
+    await sleep(1800);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+  } finally {
+    h.close();
+  }
+});
+
+test('an answer starting right after the transcript needs no nudge', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    await h.serverSendsOnly({ type: 'input.speech.started' });
+    h.client.endActivity();
+    await h.serverSendsOnly({ type: 'transcript.user', text: 'Why?' }, started, audio('b1'));
+    await sleep(1800);
+    assert.ok(!h.sent.includes('reply.create'));
+    assert.deepEqual(h.seen, ['user:Why?', 'audio:b1']);
+  } finally {
+    h.close();
+  }
+});
+
+test('if AssemblyAI never finishes hearing the question, an answer is asked for anyway', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    await h.serverSendsOnly({ type: 'input.speech.started' });
+    h.client.endActivity();
+    await sleep(2500);
+    assert.ok(!h.sent.includes('reply.create'));
+    await sleep(2200);
     assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
   } finally {
     h.close();

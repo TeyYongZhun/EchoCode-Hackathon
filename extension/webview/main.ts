@@ -55,6 +55,7 @@ app.dataset.state = 'idle';
 app.innerHTML = `
   <section class="log" aria-label="Conversation history">
     <ol class="entries"></ol>
+    <button class="to-latest" hidden>↓ Latest</button>
   </section>
   <section class="settings" aria-label="Settings" hidden>
     <header class="settings-head">
@@ -111,6 +112,7 @@ app.innerHTML = `
 const $ = <T extends HTMLElement>(selector: string) => app.querySelector<T>(selector)!;
 const entries = $<HTMLOListElement>('.entries');
 const log = $('.log');
+const toLatest = $<HTMLButtonElement>('.to-latest');
 const bubble = $('.bubble');
 const speakerEl = $('.speaker');
 const wordsEl = $('.words');
@@ -181,7 +183,7 @@ function setSettingsOpen(open: boolean): void {
     if (usage === 'error') usage = undefined;
     renderUsage();
     vscode.postMessage({ type: 'getUsage' });
-  } else {
+  } else if (followLog) {
     log.scrollTop = log.scrollHeight;
   }
 }
@@ -246,11 +248,31 @@ function applyBackground(background: PanelBackground): void {
 
 // ---- Conversation log -----------------------------------------------------
 
-function stickToBottom(action: () => void): void {
-  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  action();
-  if (atBottom) log.scrollTop = log.scrollHeight;
+/**
+ * The conversation follows new messages unless the user has scrolled up to
+ * read, and a new question always jumps back to the latest. Every change to
+ * the log is watched: checking the position before each update missed ones
+ * made elsewhere (such as the latency badge on a new answer), which pushed the
+ * view up just enough that it stopped following.
+ */
+let followLog = true;
+
+function showLatest(): void {
+  followLog = true;
+  toLatest.hidden = true;
+  log.scrollTop = log.scrollHeight;
 }
+
+new MutationObserver(() => {
+  if (followLog) log.scrollTop = log.scrollHeight;
+  else toLatest.hidden = false;
+}).observe(entries, { childList: true, subtree: true, characterData: true });
+
+log.addEventListener('scroll', () => {
+  // Our own scrolling lands at the bottom; only the user's leaves it higher.
+  followLog = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  if (followLog) toLatest.hidden = true;
+});
 
 /** The log entry for one side of a turn, created on first use. */
 function entry(turnId: number, who: 'user' | 'model'): HTMLLIElement {
@@ -273,9 +295,7 @@ function entry(turnId: number, who: 'user' | 'model'): HTMLLIElement {
 }
 
 function setEntryText(turnId: number, who: 'user' | 'model', text: string): void {
-  stickToBottom(() => {
-    entry(turnId, who).querySelector('.text')!.textContent = text.trim();
-  });
+  entry(turnId, who).querySelector('.text')!.textContent = text.trim();
 }
 
 function addPendingCard(turnId: number): void {
@@ -284,7 +304,7 @@ function addPendingCard(turnId: number): void {
   li.id = `pending-${turnId}`;
   li.className = 'card pending';
   li.textContent = 'Writing the code…';
-  stickToBottom(() => entry(turnId, 'model').after(li));
+  entry(turnId, 'model').after(li);
   codeNoteEl.textContent = 'Writing code…';
 }
 
@@ -329,10 +349,8 @@ function addCard(card: CodeCard): void {
 
   li.append(head, pre, actions);
   const pending = document.getElementById(`pending-${card.turnId}`);
-  stickToBottom(() => {
-    if (pending) pending.replaceWith(li);
-    else entry(card.turnId, 'model').after(li);
-  });
+  if (pending) pending.replaceWith(li);
+  else entry(card.turnId, 'model').after(li);
   removePendingCard(card.turnId);
   codeNoteEl.textContent = 'Code ready ↑';
   // A new code card matters more than Settings.
@@ -359,9 +377,12 @@ function onState(next: SessionState): void {
   window.clearTimeout(lingerTimer);
   switch (next) {
     case 'connecting':
+      showLatest();
       setBubble('Connecting… keep talking.', '', 'hint');
       break;
     case 'listening':
+      // A new question: back to the latest message, even if the user had scrolled up.
+      showLatest();
       latencyEl.textContent = '';
       codeNoteEl.textContent = '';
       cancelSubtitles();
@@ -483,6 +504,7 @@ async function unlockAudio(): Promise<void> {
 app.addEventListener('pointerdown', () => void unlockAudio());
 $('.stop').addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
 openSettings.addEventListener('click', () => setSettingsOpen(settings.hidden));
+toLatest.addEventListener('click', showLatest);
 $('.close-settings').addEventListener('click', () => setSettingsOpen(false));
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !settings.hidden) setSettingsOpen(false);

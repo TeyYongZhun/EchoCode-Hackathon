@@ -331,6 +331,26 @@ button {
   display: none;
 }
 
+/* Shown when the user has scrolled up and newer messages arrive; stays at the bottom of the view. */
+.to-latest {
+  position: sticky;
+  bottom: 8px;
+  display: block;
+  margin: 0 14px 8px auto;
+  padding: 3px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 12px;
+  color: #001216;
+  background: var(--cyan);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.to-latest[hidden] {
+  display: none;
+}
+
 .settings {
   padding: 4px 14px 12px;
   animation: slide-up 220ms ease-out;

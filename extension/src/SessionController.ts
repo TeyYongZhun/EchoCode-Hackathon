@@ -4,6 +4,7 @@ import { base64PcmSeconds, rmsLevel } from './audio/pcm';
 import { SilenceDetector } from './audio/silenceDetector';
 import { readSettings } from './config';
 import { captureEditorContext, captureTarget, type EditorTracker, type QuestionTarget } from './context/editorContext';
+import { formatConversation, remember, type Exchange } from './context/conversation';
 import { findLineReferences } from './context/lineReferences';
 import { AgentClient, ResumeFailedError } from './voice/AgentClient';
 import { fetchSuggestion } from './voice/suggestionClient';
@@ -113,6 +114,11 @@ export class SessionController implements vscode.Disposable {
   private replyPlaysAt = 0;
   /** Where each received word ends in modelText, and when it's spoken in the reply (ms). */
   private wordTimes: { end: number; startMs: number }[] = [];
+  /** The conversation so far, for sessions that start later (after idle, or an interrupted answer). */
+  private conversation: Exchange[] = [];
+  private rememberedTurn = 0;
+  /** The conversation from before the current session, added to its editor context. */
+  private carriedConversation = '';
 
   private readonly view: AssistantViewProvider;
   private readonly editors: EditorTracker;
@@ -185,6 +191,8 @@ export class SessionController implements vscode.Disposable {
   async stop(): Promise<void> {
     const hadActivity = this.activityOpen;
     const was = this.state;
+    if (was === 'thinking' || was === 'speaking') this.rememberTurn(true);
+    this.endSessionIfAnswering();
     this.turnId++;
     this.clearTimers();
     this.view.post({ type: 'flushAudio' });
@@ -326,6 +334,7 @@ export class SessionController implements vscode.Disposable {
   private async openSession(): Promise<void> {
     const backendUrl = readSettings().backendUrl;
     const resuming = this.live.canResume;
+    let resumed = resuming;
     const started = Date.now();
     let ticket = await fetchSessionTicket(backendUrl, this.installId);
     try {
@@ -334,9 +343,12 @@ export class SessionController implements vscode.Disposable {
       if (!(err instanceof ResumeFailedError)) throw err;
       // The session expired; carry on with a fresh conversation rather than failing.
       this.log.warn(`Couldn't resume the previous conversation (${err.message}). Starting a new one.`);
+      resumed = false;
       ticket = await fetchSessionTicket(backendUrl, this.installId);
       await this.live.connect(ticket);
     }
+    // A fresh session knows nothing of the conversation so far; tell it.
+    if (!resumed) this.carriedConversation = formatConversation(this.conversation);
     if (ticket.usage) this.view.post({ type: 'usage', ...ticket.usage });
     this.lastContext = undefined;
     this.scheduleIdleClose();
@@ -366,9 +378,10 @@ export class SessionController implements vscode.Disposable {
   /** Tells the agent a question has started, once the session is ready and the user is speaking. */
   private openActivityIfSpeaking(): void {
     if (!this.sessionReady || this.activityOpen || !this.silence.speechDetected) return;
-    if (this.turnContext !== this.lastContext) {
-      this.live.sendContext(this.turnContext);
-      this.lastContext = this.turnContext;
+    const context = this.carriedConversation ? `${this.turnContext}\n\n${this.carriedConversation}` : this.turnContext;
+    if (context !== this.lastContext) {
+      this.live.sendContext(context);
+      this.lastContext = context;
     }
     this.live.startActivity();
     for (const chunk of this.pendingAudio) this.live.sendAudio(chunk);
@@ -419,10 +432,32 @@ export class SessionController implements vscode.Disposable {
   private async bargeIn(): Promise<void> {
     this.clearTimers();
     this.view.post({ type: 'flushAudio' });
+    this.rememberTurn(true);
+    this.endSessionIfAnswering();
     // The server can't be told to stop, so the rest of this answer is dropped as it arrives.
     this.live.cancelReply();
     this.playbackEndsAt = 0;
     await this.startTurn();
+  }
+
+  /**
+   * An answer still arriving from AssemblyAI would make it throw away the next
+   * question (see AgentClient.replyInProgress), so end the session instead.
+   * The next question opens a fresh one while the user talks, and the
+   * conversation so far goes with it.
+   */
+  private endSessionIfAnswering(): void {
+    if (!this.live.replyInProgress) return;
+    this.log.info('Ending the voice session so the answer in progress stops; the next question starts a fresh one');
+    this.live.close();
+    this.lastContext = undefined;
+  }
+
+  /** Keeps this turn's question and answer (once) for sessions that start later. */
+  private rememberTurn(interrupted: boolean): void {
+    if (this.rememberedTurn === this.turnId) return;
+    this.rememberedTurn = this.turnId;
+    this.conversation = remember(this.conversation, { question: this.userText, answer: this.modelText, interrupted });
   }
 
   private onMicFrame(pcm: Int16Array): void {
@@ -585,6 +620,7 @@ export class SessionController implements vscode.Disposable {
     }
     this.view.post({ type: 'turnComplete', turnId: turn });
     this.log.info(`Turn ${turn} complete. You: "${this.userText.trim()}" / EchoCode: "${this.modelText.trim()}"`);
+    this.rememberTurn(false);
     this.scheduleHighlights(true);
     void this.requestCodeCard(turn);
     void this.reportTurnUsage(this.voiceSeconds);

@@ -212,12 +212,13 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 <details>
 <summary><b>How it works under the hood</b></summary>
 
-- **Microphone:** VS Code's panels can't use the microphone, so the extension records 16 kHz audio with PvRecorder in a background thread. It resamples the audio to the 24 kHz the Voice Agent expects, and sends it no faster than real time, because the Voice Agent drops audio that arrives faster.
+- **Microphone:** VS Code's panels can't use the microphone, so the extension records 16 kHz audio with PvRecorder in a background thread. It resamples the audio to the 24 kHz the Voice Agent expects. Audio recorded while connecting, or before speech is confirmed, is sent at up to twice real time until it catches up with your voice: tested live, the Voice Agent hears it all and answers sooner, while sending much faster gains nothing.
 - **Editor context:** each question carries the file path, language, cursor line, selection, the surrounding code with line numbers, and nearby compiler errors, up to 400 lines.
-- **Push-to-talk:** nothing is sent until you press the key, and if you don't speak, nothing is sent at all. Once you start speaking, the audio from half a second before is kept too, so a quiet first word isn't cut off. When you let go, a short tail of silence lets the Voice Agent's turn detection close the question. If no reply has started after 1.2 seconds, EchoCode asks for one directly.
+- **Push-to-talk:** nothing is sent until you press the key, and if you don't speak, nothing is sent at all. Once you start speaking, the audio from half a second before is kept too, so a quiet first word isn't cut off. When you let go, a short tail of silence lets the Voice Agent's turn detection close the question. If no reply has started 1.2 seconds after the Voice Agent has the whole question, EchoCode asks for one directly. It never asks earlier, because asking before the question is fully heard gets an empty answer.
 - **Line highlights:** the agent names lines out loud ("on line twenty-one"). The extension finds those references in the transcript and highlights each line when its word plays, using the Voice Agent's word timing.
 - **One setup for everyone:** the prompt, voice, coding key terms and audio settings live in `backend/lib/agentConfig.ts`, and every session starts with them.
-- **Reconnects:** a dropped connection resumes the same conversation if it's back within 30 seconds.
+- **Reconnects:** a dropped connection resumes the same conversation if it's back within 30 seconds. When EchoCode has to start a fresh session instead (after a few idle minutes, or when you interrupt an answer), it passes the last few questions and answers to the new one, so the conversation carries on.
+- **Interrupting:** tested live, the Voice Agent keeps playing an answer on its side after EchoCode silences it, and throws away a short question asked over it; the API can't cancel an answer. So pressing the key (or Stop) while an answer is still arriving ends that session, and your question goes to a fresh one, connected while you talk.
 - **Why no proxy:** sending every audio packet through our own server would add delay, and Vercel's WebSocket support is still in beta with a 5-minute cap. Single-use tokens protect the key just as well, at direct-connection speed.
 
 </details>

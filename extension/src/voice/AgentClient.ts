@@ -4,8 +4,15 @@ import { upsample16kTo24k } from '../audio/resample';
 import type { SessionTicket } from './tokenProvider';
 
 const CONNECT_TIMEOUT_MS = 15_000;
-/** AssemblyAI drops audio sent faster than real time, so only a small burst is allowed. */
+/** Most audio sent in one go. */
 const BURST_MS = 120;
+/**
+ * Audio queued while connecting or while speech is confirmed is sent at up to
+ * twice real time until it catches up with the mic. Tested live: nothing is
+ * dropped, and the answer comes sooner; much faster than 2x gains nothing,
+ * because AssemblyAI still works through the audio at about real time.
+ */
+const CATCH_UP_RATE = 2;
 const PACER_TICK_MS = 20;
 /** The server keeps a dropped session for 30 s; stay safely inside that. */
 const RESUME_WINDOW_MS = 25_000;
@@ -13,6 +20,8 @@ const RESUME_WINDOW_MS = 25_000;
 const RELEASE_SILENCE_MS = 320;
 /** If no reply has started this long after release, ask for one explicitly. */
 const REPLY_FALLBACK_MS = 1200;
+/** If AssemblyAI still hasn't finished hearing the question this long after release, ask anyway. */
+const HEARING_TIMEOUT_MS = 4000;
 const MIC_RATE = 16_000;
 const AGENT_RATE = 24_000;
 const SILENCE_FRAME = Buffer.alloc((AGENT_RATE / 1000) * 32 * 2).toString('base64'); // 32 ms at 24 kHz
@@ -74,12 +83,20 @@ export class AgentClient {
    * cancel it, so the rest of it is dropped here until the next reply starts.
    */
   private discarding = false;
-  /** A reply finished while the key was held, so it's the answer; no nudge needed. */
+  /** A reply with content finished for this question, so it's the answer; no nudge needed. */
   private replyCompletedThisQuestion = false;
   /** The reply in progress has passed on some audio or words. */
   private replyHasContent = false;
-  /** This question already got one empty reply and a request for another. */
-  private askedAgainAfterEmpty = false;
+  /** EchoCode already asked for this question's answer with reply.create. */
+  private askedForReply = false;
+  /** AssemblyAI reported speech it hasn't transcribed yet. */
+  private userSpeaking = false;
+  /** A transcript of this question has arrived. */
+  private heardThisQuestion = false;
+  /** The release nudge waits for the question's transcript before counting down. */
+  private nudgeAfterTranscript = false;
+  /** The hotkey was released and this question's answer hasn't started yet. */
+  private awaitingAnswer = false;
   private readonly events: AgentClientEvents;
   private readonly log: vscode.LogOutputChannel;
 
@@ -188,7 +205,10 @@ export class AgentClient {
     this.holding = true;
     this.held = [];
     this.replyCompletedThisQuestion = false;
-    this.askedAgainAfterEmpty = false;
+    this.askedForReply = false;
+    this.heardThisQuestion = false;
+    this.nudgeAfterTranscript = false;
+    this.awaitingAnswer = false;
   }
 
   /** Streams one 16 kHz microphone frame, converted to 24 kHz and paced to real time. */
@@ -213,11 +233,23 @@ export class AgentClient {
   }
 
   /**
+   * An answer is still arriving from AssemblyAI (not one being dropped). Tested
+   * live, AssemblyAI keeps "playing" such an answer after EchoCode silences it,
+   * and throws away a short question asked over it; the API can't cancel it.
+   * So interrupting it ends the session, and the question goes to a fresh one.
+   */
+  get replyInProgress(): boolean {
+    return this.replyActive && !this.discarding;
+  }
+
+  /**
    * The user stopped the conversation or interrupted the answer: drop the rest
    * of the reply in progress, and don't ask for one to a question just closed.
    */
   cancelReply(): void {
     clearTimeout(this.replyFallback);
+    this.nudgeAfterTranscript = false;
+    this.awaitingAnswer = false;
     this.queue = this.queue.filter((item) => item.kind !== 'released');
     if (this.replyActive) this.discarding = true;
     this.holding = false;
@@ -249,9 +281,17 @@ export class AgentClient {
 
   private handleMessage(message: ServerMessage): void {
     switch (message.type) {
+      case 'input.speech.started':
+        this.userSpeaking = true;
+        break;
+      case 'input.speech.stopped':
+        this.userSpeaking = false;
+        break;
       case 'reply.started':
-        clearTimeout(this.replyFallback);
         this.replyActive = true;
+        clearTimeout(this.replyFallback);
+        this.nudgeAfterTranscript = false;
+        this.awaitingAnswer = false;
         this.discarding = false;
         this.replyCompletedThisQuestion = false;
         this.replyHasContent = false;
@@ -273,13 +313,30 @@ export class AgentClient {
           this.onAgentWord(message.delta, message.start_ms);
         }
         break;
+      case 'transcript.agent':
+        // The reply's full text, normally already passed on word by word. When no words came
+        // (seen once: an answer that played with no text), pass it on whole.
+        if (typeof message.text === 'string' && message.text.trim() && !this.replyText.trim() && !this.discarding) {
+          this.replyHasContent = true;
+          this.onAgentWord(message.text.trim(), undefined);
+        }
+        break;
       case 'transcript.user':
+        this.userSpeaking = false;
+        this.heardThisQuestion = true;
         if (typeof message.text === 'string' && message.text.trim()) this.events.inputTranscript(message.text.trim());
+        if (this.nudgeAfterTranscript) {
+          // AssemblyAI has the whole question now; the answer normally starts right away.
+          this.nudgeAfterTranscript = false;
+          this.armReplyFallback();
+        }
         break;
       case 'reply.done':
         this.replyActive = false;
         if (this.discarding) {
           this.discarding = false;
+          // A dropped answer ending doesn't answer the question that's waiting.
+          if (this.awaitingAnswer && !this.holding) this.armReplyFallback();
         } else if (message.status === 'interrupted') {
           // Cancelled because the agent heard more of the question. While
           // holding, just drop it; after release, a new reply follows.
@@ -295,6 +352,8 @@ export class AgentClient {
           this.replyCompletedThisQuestion = true;
           this.held.push(() => this.events.turnComplete());
         } else {
+          // Also stops the release nudge still queued behind the closing silence from asking again.
+          this.replyCompletedThisQuestion = true;
           this.events.turnComplete();
         }
         break;
@@ -305,21 +364,28 @@ export class AgentClient {
   }
 
   /**
-   * A reply ended without a word or a sound. Seen after interrupting EchoCode
-   * with a new question: taken as the answer, it silently ended the question.
-   * Ask for a real answer once; a second empty one does end the question.
+   * A reply ended without a word or a sound. Taken as the answer, it silently
+   * ended the question. Tested live, AssemblyAI ends a reply this way when it
+   * started answering before the question's transcript was final, and the
+   * real answer usually starts right after; asking for one at that moment
+   * cuts the real one off too. So wait for it, and ask only if none starts;
+   * if that answer is empty as well, end the question.
    */
   private onEmptyReply(status: unknown): void {
     this.log.info(`A reply ended with nothing in it (status: ${String(status)})`);
     // While the key is held the question isn't finished; release asks for a reply if none comes.
     if (this.holding) return;
-    if (this.askedAgainAfterEmpty) {
-      this.events.turnComplete();
-      return;
-    }
-    this.askedAgainAfterEmpty = true;
-    this.log.info('Asking for the answer again');
-    this.send({ type: 'reply.create' });
+    clearTimeout(this.replyFallback);
+    // Cleared by reply.started when the real answer follows.
+    this.replyFallback = setTimeout(() => {
+      if (this.askedForReply) {
+        this.events.turnComplete();
+        return;
+      }
+      this.askedForReply = true;
+      this.log.info('No answer followed; asking for one');
+      this.send({ type: 'reply.create' });
+    }, REPLY_FALLBACK_MS);
   }
 
   /**
@@ -346,12 +412,12 @@ export class AgentClient {
     this.pump();
   }
 
-  /** Sends queued items in order, never faster than real-time audio. */
+  /** Sends queued items in order, never faster than CATCH_UP_RATE times real-time audio. */
   private pump(): void {
     clearTimeout(this.pacer);
     this.pacer = undefined;
     const now = Date.now();
-    this.budgetMs = Math.min(BURST_MS, this.budgetMs + (now - this.lastPump));
+    this.budgetMs = Math.min(BURST_MS, this.budgetMs + (now - this.lastPump) * CATCH_UP_RATE);
     this.lastPump = now;
 
     while (this.queue.length > 0) {
@@ -363,6 +429,7 @@ export class AgentClient {
       } else if (item.kind === 'message') {
         this.send(item.payload);
       } else {
+        this.awaitingAnswer = !this.replyCompletedThisQuestion;
         this.armReplyFallback();
       }
       this.queue.shift();
@@ -370,14 +437,28 @@ export class AgentClient {
     if (this.queue.length > 0) this.pacer = setTimeout(() => this.pump(), PACER_TICK_MS);
   }
 
+  /**
+   * Asks for an answer if none starts. Not while AssemblyAI is still working
+   * through the question, though: tested live, asking then gets an empty
+   * answer (and sometimes none at all). That happened whenever question audio
+   * was still queued at release, as on the first question after connecting.
+   */
   private armReplyFallback(): void {
     clearTimeout(this.replyFallback);
-    // A reply is already playing, or one finished while the key was held.
-    if (this.replyActive || this.replyCompletedThisQuestion) return;
-    this.replyFallback = setTimeout(() => {
-      this.log.info('No reply yet after release; asking for one');
-      this.send({ type: 'reply.create' });
-    }, REPLY_FALLBACK_MS);
+    // A reply is already playing, or one finished while the key was held. A reply being
+    // dropped doesn't count: waiting on it is how interrupting used to leave EchoCode stuck.
+    if ((this.replyActive && !this.discarding) || this.replyCompletedThisQuestion) return;
+    const hearing = this.userSpeaking || !this.heardThisQuestion;
+    this.nudgeAfterTranscript = hearing;
+    this.replyFallback = setTimeout(
+      () => {
+        this.nudgeAfterTranscript = false;
+        this.log.info('No reply yet after release; asking for one');
+        this.askedForReply = true;
+        this.send({ type: 'reply.create' });
+      },
+      hearing ? HEARING_TIMEOUT_MS : REPLY_FALLBACK_MS,
+    );
   }
 
   private send(payload: object): void {
