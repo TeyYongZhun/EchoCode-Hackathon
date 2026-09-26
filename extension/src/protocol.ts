@@ -2,6 +2,10 @@
 
 export type SessionState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
+/** Panel background themes, chosen in the panel's Settings or the echocode.panelBackground setting. */
+export const PANEL_BACKGROUNDS = ['midnight', 'graphite', 'purple', 'ocean', 'vscode'] as const;
+export type PanelBackground = (typeof PANEL_BACKGROUNDS)[number];
+
 export interface CodeCard {
   id: string;
   turnId: number;
@@ -37,10 +41,21 @@ export type ToWebview =
   | { type: 'codeNone'; turnId: number }
   /** This month's voice usage, when the backend meters it. */
   | { type: 'usage'; plan: 'free' | 'pro'; usedSeconds: number; limitSeconds: number | null }
+  /** Usage can't be shown: the backend doesn't meter it ('off'), or asking failed ('error'). */
+  | { type: 'usageUnavailable'; reason: 'off' | 'error' }
+  | { type: 'background'; background: PanelBackground }
+  /** The talk hotkey. `custom` once the user has opened Keyboard Shortcuts to change it, since its new key can't be read. */
+  | { type: 'hotkey'; label: string; custom: boolean }
   | { type: 'error'; message: string };
 
 export type FromWebview =
   | { type: 'ready' }
   | { type: 'stop' }
   | { type: 'insertCode'; id: string }
-  | { type: 'copyCode'; id: string };
+  | { type: 'copyCode'; id: string }
+  /** The Settings view opened and wants this month's usage. */
+  | { type: 'getUsage' }
+  | { type: 'setBackground'; background: PanelBackground }
+  | { type: 'openPricing' }
+  /** Opens Keyboard Shortcuts filtered to EchoCode's talk command. */
+  | { type: 'openKeybindings' };

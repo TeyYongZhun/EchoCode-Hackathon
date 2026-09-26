@@ -57,6 +57,15 @@ test('SilenceDetector counts choppy speech with gaps between syllables', () => {
   assert.equal(detector.speechDetected, true);
 });
 
+test('SilenceDetector reports sound as soon as one frame is loud, before speech is confirmed', () => {
+  const detector = new SilenceDetector(FRAME_MS, 1500);
+  feed(detector, 0.003, 300);
+  assert.equal(detector.soundHeard, false);
+  feed(detector, 0.05, 32);
+  assert.equal(detector.soundHeard, true);
+  assert.equal(detector.speechDetected, false);
+});
+
 test('SilenceDetector ends the turn after speech then silence', () => {
   const detector = new SilenceDetector(FRAME_MS, 1500);
   assert.equal(feed(detector, 0.2, 1000), false);

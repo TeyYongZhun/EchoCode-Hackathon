@@ -11,7 +11,9 @@
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
-export const FREE_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_FREE_SECONDS_PER_MONTH ?? 30 * 60);
+/** Voice allowance per month: 15 minutes (about 20 questions) on Free, 150 (about 200) on Pro. */
+export const FREE_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_FREE_SECONDS_PER_MONTH ?? 15 * 60);
+export const PRO_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_PRO_SECONDS_PER_MONTH ?? 150 * 60);
 /** Session tokens one install may request per hour, to blunt abuse of the public endpoint. */
 const TOKENS_PER_HOUR_PER_INSTALL = 60;
 const TOKENS_PER_HOUR_PER_IP = 120;
@@ -28,8 +30,7 @@ const PRO_INSTALL_IDS = new Set(
 export interface Usage {
   plan: 'free' | 'pro';
   usedSeconds: number;
-  /** Null for unlimited (Pro). */
-  limitSeconds: number | null;
+  limitSeconds: number;
 }
 
 export function isMeteringEnabled(): boolean {
@@ -60,12 +61,12 @@ function monthKey(installId: string): string {
 
 function describe(installId: string, usedSeconds: number): Usage {
   return PRO_INSTALL_IDS.has(installId)
-    ? { plan: 'pro', usedSeconds, limitSeconds: null }
+    ? { plan: 'pro', usedSeconds, limitSeconds: PRO_SECONDS_PER_MONTH }
     : { plan: 'free', usedSeconds, limitSeconds: FREE_SECONDS_PER_MONTH };
 }
 
 export function isOverLimit(usage: Usage): boolean {
-  return usage.limitSeconds !== null && usage.usedSeconds >= usage.limitSeconds;
+  return usage.usedSeconds >= usage.limitSeconds;
 }
 
 /** This month's usage, or null when metering is off. */

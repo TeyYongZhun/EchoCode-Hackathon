@@ -1,16 +1,19 @@
-import type { CodeCard, FromWebview, SessionState, ToWebview } from '../src/protocol';
+import {
+  PANEL_BACKGROUNDS,
+  type CodeCard,
+  type FromWebview,
+  type PanelBackground,
+  type SessionState,
+  type ToWebview,
+} from '../src/protocol';
 import { AudioPlayer } from './AudioPlayer';
 import { ROBOT_SVG } from './robot';
 import { currentSentence } from './subtitles';
 
-interface ViewState {
-  logOpen?: boolean;
-}
+type Usage = Extract<ToWebview, { type: 'usage' }>;
 
 declare function acquireVsCodeApi(): {
   postMessage(message: FromWebview): void;
-  getState(): ViewState | undefined;
-  setState(state: ViewState): void;
 };
 
 const vscode = acquireVsCodeApi();
@@ -27,6 +30,16 @@ const STATUS: Record<SessionState, string> = {
 const SUBTITLE_LINGER_MS = 5000;
 /** Show each subtitle a moment before its words are heard. */
 const SUBTITLE_LEAD_MS = 200;
+/** Voice minutes an average question uses, for the "about N questions left" estimate. */
+const MINUTES_PER_QUESTION = 0.75;
+
+const BACKGROUND_LABELS: Record<PanelBackground, string> = {
+  midnight: 'Midnight',
+  graphite: 'Graphite',
+  purple: 'Purple',
+  ocean: 'Ocean',
+  vscode: 'VS Code theme',
+};
 
 const app = document.getElementById('app')!;
 app.className = 'app';
@@ -34,6 +47,42 @@ app.dataset.state = 'idle';
 app.innerHTML = `
   <section class="log" aria-label="Conversation history">
     <ol class="entries"></ol>
+  </section>
+  <section class="settings" aria-label="Settings" hidden>
+    <header class="settings-head">
+      <h2>Settings</h2>
+      <button class="close-settings" title="Close settings" aria-label="Close settings">×</button>
+    </header>
+    <div class="settings-block">
+      <h3>Plan</h3>
+      <div class="plan-row">
+        <span class="plan-name"></span>
+        <button class="upgrade" hidden>Upgrade to Pro</button>
+      </div>
+    </div>
+    <div class="settings-block">
+      <h3>Usage this month</h3>
+      <div class="usage-bar" hidden><span></span></div>
+      <p class="usage-text"></p>
+      <p class="usage-sub"></p>
+    </div>
+    <div class="settings-block">
+      <h3>Hotkey</h3>
+      <div class="plan-row">
+        <span class="hotkey-name"></span>
+        <button class="change-hotkey">Change hotkey</button>
+      </div>
+      <p class="usage-sub hotkey-help"></p>
+    </div>
+    <div class="settings-block">
+      <h3>Background</h3>
+      <div class="swatches" role="radiogroup" aria-label="Panel background">
+        ${PANEL_BACKGROUNDS.map(
+          (bg) =>
+            `<button class="swatch" role="radio" aria-checked="false" data-bg="${bg}"><span class="chip"></span>${BACKGROUND_LABELS[bg]}</button>`,
+        ).join('')}
+      </div>
+    </div>
   </section>
   <div class="notice" hidden>Your browser paused audio. <button class="unlock">Enable voice</button></div>
   <section class="stage">
@@ -45,7 +94,7 @@ app.innerHTML = `
       <p class="meta"><span class="status">Ready</span><span class="latency"></span><span class="code-note"></span><span class="quota"></span></p>
     </div>
     <div class="controls">
-      <button class="toggle-log" aria-expanded="false" title="Show conversation">^</button>
+      <button class="open-settings" aria-expanded="false" title="Settings" aria-label="Settings">⚙</button>
       <button class="stop" title="Stop">■</button>
     </div>
   </section>
@@ -61,7 +110,16 @@ const statusEl = $('.status');
 const latencyEl = $('.latency');
 const codeNoteEl = $('.code-note');
 const quotaEl = $('.quota');
-const toggleLog = $<HTMLButtonElement>('.toggle-log');
+const openSettings = $<HTMLButtonElement>('.open-settings');
+const settings = $('.settings');
+const planNameEl = $('.plan-name');
+const upgradeButton = $<HTMLButtonElement>('.upgrade');
+const usageBar = $('.usage-bar');
+const usageText = $('.usage-text');
+const usageSub = $('.usage-sub');
+const hotkeyNameEl = $('.hotkey-name');
+const hotkeyHelpEl = $('.hotkey-help');
+const swatches = [...app.querySelectorAll<HTMLButtonElement>('.swatch')];
 const notice = $('.notice');
 
 let state: SessionState = 'idle';
@@ -73,6 +131,8 @@ let subtitleVersion = 0;
 let shownSubtitle = 0;
 let lingerTimer: number | undefined;
 let showingError = false;
+/** The latest usage for the Settings view; undefined until the backend has answered. */
+let usage: Usage | 'off' | 'error' | undefined;
 
 // ---- Bubble ---------------------------------------------------------------
 
@@ -102,15 +162,81 @@ function cancelSubtitles(): void {
   shownSubtitle = ++subtitleVersion;
 }
 
-// ---- Conversation log -----------------------------------------------------
+// ---- Settings -------------------------------------------------------------
 
-function setLogOpen(open: boolean): void {
-  app.classList.toggle('log-open', open);
-  toggleLog.setAttribute('aria-expanded', String(open));
-  toggleLog.title = open ? 'Hide conversation' : 'Show conversation';
-  vscode.setState({ ...vscode.getState(), logOpen: open });
-  if (open) log.scrollTop = log.scrollHeight;
+/** Settings takes the conversation's place while it's open. */
+function setSettingsOpen(open: boolean): void {
+  settings.hidden = !open;
+  log.hidden = open;
+  openSettings.setAttribute('aria-expanded', String(open));
+  if (open) {
+    if (usage === 'error') usage = undefined;
+    renderUsage();
+    vscode.postMessage({ type: 'getUsage' });
+  } else {
+    log.scrollTop = log.scrollHeight;
+  }
 }
+
+/** The first day of next month, when the backend's monthly (UTC) usage starts again. */
+function resetDate(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function renderUsage(): void {
+  usageBar.hidden = true;
+  usageSub.textContent = '';
+  upgradeButton.hidden = true;
+  delete planNameEl.dataset.plan;
+  if (usage === undefined) {
+    planNameEl.textContent = '…';
+    usageText.textContent = 'Loading…';
+    return;
+  }
+  if (usage === 'off' || usage === 'error') {
+    planNameEl.textContent = usage === 'off' ? 'No limits on this server' : 'Unknown';
+    usageText.textContent =
+      usage === 'off' ? "Usage isn't metered on this server." : "Couldn't load usage. Check your connection and try again.";
+    return;
+  }
+  const pro = usage.plan === 'pro';
+  planNameEl.textContent = pro ? 'Pro' : 'Free';
+  planNameEl.dataset.plan = usage.plan;
+  upgradeButton.hidden = pro;
+  // Rounded up, so used and left (rounded down, as in the bubble) add up to the limit.
+  const usedMinutes = Math.ceil(usage.usedSeconds / 60);
+  if (usage.limitSeconds === null) {
+    usageText.textContent = `${usedMinutes} min used, no limit`;
+    return;
+  }
+  const limitMinutes = Math.round(usage.limitSeconds / 60);
+  const minutesLeft = Math.max(0, Math.floor((usage.limitSeconds - usage.usedSeconds) / 60));
+  usageBar.hidden = false;
+  usageBar.dataset.low = String(minutesLeft <= 5);
+  usageBar.querySelector('span')!.style.width = `${Math.min(100, (usage.usedSeconds / usage.limitSeconds) * 100)}%`;
+  usageText.textContent = `${usedMinutes} of ${limitMinutes} min used`;
+  usageSub.textContent = `${minutesLeft} min left, about ${Math.floor(minutesLeft / MINUTES_PER_QUESTION)} questions. Resets ${resetDate()}.`;
+}
+
+/** Once the user may have rebound the hotkey, the panel stops naming the default key. */
+function applyHotkey(label: string, custom: boolean): void {
+  hotkey = custom ? 'your EchoCode hotkey' : label;
+  hotkeyNameEl.textContent = custom ? 'Custom' : label;
+  hotkeyHelpEl.textContent = `${custom ? `Default: ${label}. ` : ''}Hold it and ask, let go to send. Or tap it to start and tap again to send.`;
+  if (state === 'idle' && !showingError) showHint();
+}
+
+function applyBackground(background: PanelBackground): void {
+  document.body.dataset.bg = background;
+  for (const swatch of swatches) swatch.setAttribute('aria-checked', String(swatch.dataset.bg === background));
+}
+
+// ---- Conversation log -----------------------------------------------------
 
 function stickToBottom(action: () => void): void {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
@@ -201,7 +327,8 @@ function addCard(card: CodeCard): void {
   });
   removePendingCard(card.turnId);
   codeNoteEl.textContent = 'Code ready ↑';
-  setLogOpen(true);
+  // A new code card matters more than Settings.
+  setSettingsOpen(false);
   li.scrollIntoView({ block: 'nearest' });
 }
 
@@ -230,7 +357,7 @@ function onState(next: SessionState): void {
       latencyEl.textContent = '';
       codeNoteEl.textContent = '';
       cancelSubtitles();
-      setBubble(`Listening… let go of ${hotkey} (or tap it) to send.`, '', 'hint');
+      setBubble(`Listening… let go of ${hotkey} to send.`, '', 'hint');
       break;
     case 'thinking':
       setBubble('Thinking…', '', 'hint');
@@ -303,9 +430,22 @@ function onMessage(message: ToWebview): void {
         quotaEl.textContent = 'Pro · unlimited';
       } else {
         const minutesLeft = Math.max(0, Math.floor((message.limitSeconds - message.usedSeconds) / 60));
-        quotaEl.textContent = `Free · ${minutesLeft} min left this month`;
+        quotaEl.textContent = `${message.plan === 'pro' ? 'Pro' : 'Free'} · ${minutesLeft} min left this month`;
         quotaEl.dataset.low = String(minutesLeft <= 5);
       }
+      usage = message;
+      renderUsage();
+      break;
+    case 'usageUnavailable':
+      // Keep numbers we already have rather than replacing them with an error.
+      if (message.reason === 'off' || typeof usage !== 'object') usage = message.reason;
+      renderUsage();
+      break;
+    case 'background':
+      applyBackground(message.background);
+      break;
+    case 'hotkey':
+      applyHotkey(message.label, message.custom);
       break;
     case 'error':
       // Errors stay up until the next conversation instead of fading into the hint.
@@ -327,7 +467,20 @@ async function unlockAudio(): Promise<void> {
 // Any click in the panel lets the browser play audio, in case it's holding it back.
 app.addEventListener('pointerdown', () => void unlockAudio());
 $('.stop').addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
-toggleLog.addEventListener('click', () => setLogOpen(!app.classList.contains('log-open')));
+openSettings.addEventListener('click', () => setSettingsOpen(settings.hidden));
+$('.close-settings').addEventListener('click', () => setSettingsOpen(false));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !settings.hidden) setSettingsOpen(false);
+});
+upgradeButton.addEventListener('click', () => vscode.postMessage({ type: 'openPricing' }));
+$('.change-hotkey').addEventListener('click', () => vscode.postMessage({ type: 'openKeybindings' }));
+for (const swatch of swatches) {
+  swatch.addEventListener('click', () => {
+    const background = swatch.dataset.bg as PanelBackground;
+    applyBackground(background);
+    vscode.postMessage({ type: 'setBackground', background });
+  });
+}
 $('.unlock').addEventListener('click', () => void unlockAudio());
 entries.addEventListener('click', (event) => {
   const button = (event.target as HTMLElement).closest('button');
@@ -354,6 +507,5 @@ function animate(): void {
 }
 requestAnimationFrame(animate);
 
-setLogOpen(vscode.getState()?.logOpen ?? true);
 showHint();
 vscode.postMessage({ type: 'ready' });

@@ -296,15 +296,15 @@ h2 {
 
 .pricing {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 16px;
-  max-width: 720px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  max-width: 860px;
 }
 
 .plan {
-  padding: 24px;
+  padding: 28px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--surface);
 }
 
@@ -313,27 +313,129 @@ h2 {
   box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.25), 0 0 40px rgba(0, 229, 255, 0.08);
 }
 
-.plan h3 {
-  margin: 0;
-  font-size: 18px;
+.plan-icon {
+  display: block;
+  height: 48px;
+  margin-bottom: 18px;
+  color: var(--text);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.price {
-  margin: 8px 0 16px;
-  font-size: 36px;
+.plan-icon .solid {
+  fill: currentColor;
+  stroke: none;
+}
+
+.plan.featured .plan-icon {
+  color: var(--cyan);
+  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.5));
+}
+
+.plan-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.plan h3 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.plan-badge {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.plan-tagline {
+  margin: 2px 0 18px;
+}
+
+.plan-price {
+  margin: 0;
+  font-size: 24px;
   font-weight: 700;
 }
 
-.price small {
+/* Tall enough for the Pro note, so both buttons line up. */
+.plan-note {
+  min-height: 3.2em;
+  margin: 2px 0 0;
   color: var(--muted);
-  font-size: 15px;
-  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
-.plan ul {
+.plan-button {
+  display: block;
+  margin: 20px 0 24px;
+  text-align: center;
+}
+
+.plan-button[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.plan hr {
+  margin: 0 0 20px;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.plan-features-title {
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.plan-features {
+  display: grid;
+  gap: 10px;
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+
+.plan-features li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 4px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.plan.featured .check {
+  stroke: var(--cyan);
+}
+
+.pricing-footnote {
+  max-width: 860px;
+  margin: 20px 0 0;
   color: var(--muted);
+  font-size: 14px;
 }
 
 footer {

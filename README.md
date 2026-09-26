@@ -50,7 +50,8 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 | 🔦 **Points at the code** | Lines light up at the moment they're mentioned in the answer. |
 | ⚡ **One-click fixes** | Suggested code appears as a card: **Replace lines** or **Insert at Cursor**. |
 | ✋ **Interrupt any time** | Press the key mid-answer to ask something else. |
-| 💬 **Live subtitles** | The spoken answer appears as subtitles, with a full chat history one click away. |
+| 💬 **Live subtitles** | The spoken answer appears as subtitles, with the full conversation always visible above it. |
+| ⚙️ **Your settings** | See your plan and minutes left, change the hotkey, and pick a panel background. |
 
 ## How EchoCode uses AssemblyAI
 
@@ -66,7 +67,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 - **The key stays safe.** Only the backend on Vercel knows the AssemblyAI API key. The extension gets a single-use token that expires within two minutes.
 - **The voice is fast.** Audio goes straight from VS Code to AssemblyAI, with no server in between.
-- **Costs stay low.** Unused sessions close after 3 minutes, and each user's free minutes are counted in Upstash Redis.
+- **Costs stay low.** Unused sessions close after 3 minutes, and each user's voice minutes are counted in Upstash Redis against their plan.
 
 ## Business model
 
@@ -74,16 +75,19 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 - **Market:** VS Code has about 30 million users. Our first target is the estimated 5 to 7 million students and entry-level developers among them.
 - **Pricing:**
 
-| Plan | Price | Includes |
-|---|---|---|
-| Free | $0 | 30 minutes of voice a month |
-| Pro | $10/month | Unlimited voice and larger codebase context |
+| Plan | Price | Voice minutes | Includes |
+|---|---|---|---|
+| Free | $0 | 15 a month, about 20 questions | Spoken answers, line highlights, live subtitles, one-click code cards |
+| Pro | $15/month, or $144/year | 150 a month, about 200 questions | Everything in Free, plus a stronger AI model for code fixes, larger code context and minute top-ups |
+
+- **Teams and universities (coming next):** shared minutes for companies, and a campus plan with an instructor view showing which concepts students struggle with.
+- **Unit economics:** the Voice Agent API costs $0.075 a minute, so a free user costs at most $1.13 a month and a Pro user at most $11.25, less than they pay. The average student in published classroom studies asks 8 to 20 AI questions a month, which fits inside Free. Question counts assume about 0.75 minutes of session time per question.
 
 ## Try it
 
 You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the right panel; older versions show it in the Explorer) and a microphone. Headphones help. No API key is needed.
 
-1. **Install:** download `echocode-0.1.1.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
+1. **Install:** download `echocode-0.1.2.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
 2. **Open the demo:** download this repository and open its `demo/` folder in VS Code.
 3. **Check your mic:** press **Ctrl+Shift+P** and run **EchoCode: Test Microphone**.
 4. **Ask:** open a demo file, select the code below, click inside the editor, then **hold Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS), ask, and let go. You can also click **🤖 EchoCode** in the status bar instead.
@@ -94,7 +98,7 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 | `DuplicateFinder.java` | the `findDuplicates` method | *"Why is this so slow with a big list? How do I fix it?"* Then click **Replace lines** on the code card. |
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
 
-The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. Click **^** there to hide or show the conversation.
+The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
 
 ## Tech stack
 
@@ -105,7 +109,7 @@ The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** show
 | VS Code extension | TypeScript, VS Code Extension API, esbuild |
 | Microphone | PvRecorder (Windows, macOS and Linux) |
 | Backend and landing page | Next.js on Vercel |
-| Free-tier usage | Upstash Redis |
+| Usage metering | Upstash Redis |
 
 ## Repository layout
 
@@ -125,7 +129,7 @@ EchoCode-Hackathon/
 ├── backend/                      Next.js backend on Vercel
 │   ├── app/api/token/            single-use voice tokens
 │   ├── app/api/suggest/          code cards
-│   ├── app/api/usage/            free-tier minutes
+│   ├── app/api/usage/            voice minutes per plan
 │   ├── app/api/health/           status check
 │   ├── app/page.tsx              landing page
 │   └── lib/                      prompt, AssemblyAI, usage
@@ -140,7 +144,7 @@ EchoCode-Hackathon/
 | VS Code extension | GitHub Releases | Build with `npm run package` in `extension/` and attach the `.vsix` to a release |
 | Backend and landing page | Vercel | Root Directory `backend`, Framework Preset Next.js, add the `ASSEMBLYAI_API_KEY` env variable |
 | Voice and code suggestions | AssemblyAI | Voice Agent API and LLM Gateway; the API key lives only on the backend |
-| Usage database | Upstash Redis (Vercel Marketplace) | Optional; turns on the 30-minute free-tier quota |
+| Usage database | Upstash Redis (Vercel Marketplace) | Optional; turns on the monthly voice minutes (15 on Free, 150 on Pro) |
 
 Live backend and landing page: https://echo-code-hackathon.vercel.app
 
@@ -177,7 +181,7 @@ npm run dev                  # serves http://localhost:3000
 
 Set `echocode.backendUrl` to `http://localhost:3000` in VS Code. From `extension/`, run `ECHOCODE_BACKEND_URL=http://localhost:3000 npm run dev` to have the launcher start the backend for you.
 
-To deploy on Vercel, import the repository, set **Root Directory** to `backend` and **Framework Preset** to Next.js, and add `ASSEMBLYAI_API_KEY`. To switch on the free-tier quota, add **Upstash Redis** from the Vercel Marketplace and redeploy. Without it, usage isn't counted and nothing is blocked. Every option is listed in `backend/.env.example`.
+To deploy on Vercel, import the repository, set **Root Directory** to `backend` and **Framework Preset** to Next.js, and add `ASSEMBLYAI_API_KEY`. To switch on the monthly voice minutes, add **Upstash Redis** from the Vercel Marketplace and redeploy. Without it, usage isn't counted and nothing is blocked. Every option is listed in `backend/.env.example`.
 
 </details>
 
@@ -190,7 +194,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | `extension/` | `npm test` | Unit tests: editor context, line references, subtitles, hotkey handling, audio and resampling |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the window to pick up changes) |
-| `extension/` | `npm run package` | Builds `echocode-0.1.1.vsix` with the microphone library for every platform |
+| `extension/` | `npm run package` | Builds `echocode-0.1.2.vsix` with the microphone library for every platform |
 | `backend/` | `npm run dev` | Runs the backend at http://localhost:3000 |
 | `backend/` | `npm run smoke` | Asks the Voice Agent one question through the backend and reports the reply and latency |
 | `backend/` | `npm run build` | Production build of the backend and landing page |
@@ -201,6 +205,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | `echocode.micDeviceIndex` | `-1` | Microphone to record from; `-1` is the system default |
 | `echocode.maxContextLines` | `400` | Lines of the current file sent with each question |
 | `echocode.autoStopSilenceMs` | `2000` | Send automatically after this much silence; `0` turns it off |
+| `echocode.panelBackground` | `midnight` | Panel background: `midnight`, `graphite`, `purple`, `ocean` or `vscode` (follow your theme). Also in the panel's ⚙ Settings |
 
 </details>
 
@@ -209,7 +214,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 
 - **Microphone:** VS Code's panels can't use the microphone, so the extension records 16 kHz audio with PvRecorder in a background thread. It resamples the audio to the 24 kHz the Voice Agent expects, and sends it no faster than real time, because the Voice Agent drops audio that arrives faster.
 - **Editor context:** each question carries the file path, language, cursor line, selection, the surrounding code with line numbers, and nearby compiler errors, up to 400 lines.
-- **Push-to-talk:** nothing is sent until you press the key, and if you don't speak, nothing is sent at all. When you let go, a short tail of silence lets the Voice Agent's turn detection close the question. If no reply has started after 1.2 seconds, EchoCode asks for one directly.
+- **Push-to-talk:** nothing is sent until you press the key, and if you don't speak, nothing is sent at all. Once you start speaking, the audio from half a second before is kept too, so a quiet first word isn't cut off. When you let go, a short tail of silence lets the Voice Agent's turn detection close the question. If no reply has started after 1.2 seconds, EchoCode asks for one directly.
 - **Line highlights:** the agent names lines out loud ("on line twenty-one"). The extension finds those references in the transcript and highlights each line when its word plays, using the Voice Agent's word timing.
 - **One setup for everyone:** the prompt, voice, coding key terms and audio settings live in `backend/lib/agentConfig.ts`, and every session starts with them.
 - **Reconnects:** a dropped connection resumes the same conversation if it's back within 30 seconds.
@@ -223,10 +228,12 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | Problem | Fix |
 |---|---|
 | No **🤖 EchoCode** in the status bar | Check the extension is installed and enabled, then run **Developer: Reload Window**. Right-click the status bar and make sure **EchoCode** is ticked. |
-| The hotkey does nothing | Click inside a code editor first; the terminal and chat boxes take the key for themselves. Or click the status bar robot. |
+| The hotkey does nothing | Click inside a code editor first; the terminal and chat boxes take the key for themselves. Or click the status bar robot. If another extension uses the same key, pick a new one in the panel's **⚙ → Change hotkey**. |
+| The first words of a question are wrong | Pause for a moment after pressing the key before you speak, and speak close to the microphone. If it keeps happening, raise the microphone's input level in your system sound settings. |
 | Double-clicking the `.vsix` opens "VSIX Installer" and fails | That's Visual Studio's installer. Use **Extensions view → ⋯ → Install from VSIX…** in VS Code instead. |
 | "Couldn't open the microphone" or silence in the mic test | On Windows, turn on **Settings → Privacy & security → Microphone → Let desktop apps access your microphone**, then run **EchoCode: Choose Microphone**. |
 | "I didn't hear anything" | No speech was detected, so nothing was sent. Speak closer to the microphone. |
+| "EchoCode didn't answer that time" | No answer arrived within 20 seconds. Ask again; if it repeats, check **View → Output → EchoCode** for the reason. |
 | "Extension host did not start in 10 seconds" | The window is waiting for a debugger. Close it and use `npm run dev` in `extension/` instead. |
 | "Can't reach the EchoCode backend" | Check your internet connection, or run the backend locally. |
 

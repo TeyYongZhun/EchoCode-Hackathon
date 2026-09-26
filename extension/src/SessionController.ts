@@ -22,6 +22,12 @@ const MAX_QUESTION_MS = 60_000;
 const PLAYBACK_TAIL_MS = 200;
 /** Audio kept from just before speech starts (about half a second), so the first word isn't clipped. */
 const PRE_ROLL_FRAMES = 16;
+/**
+ * Once anything loud is heard, audio is kept until speech is confirmed (about
+ * five seconds at most). Quiet speech takes a while to confirm, and trimming
+ * to the pre-roll meanwhile cut off the first word: "Hello, hello" became "I know".
+ */
+const MAX_UNCONFIRMED_FRAMES = 156;
 const NOTHING_HEARD = "I didn't hear anything. Try again, a little closer to the microphone.";
 /** Show a highlight slightly before the words are heard, since reading lags listening. */
 const HIGHLIGHT_LEAD_MS = 300;
@@ -29,7 +35,8 @@ const HIGHLIGHT_LEAD_MS = 300;
 const HIGHLIGHT_LINGER_MS = 8000;
 /** Answers shorter than this can't describe a code change. */
 const MIN_ANSWER_FOR_CODE = 40;
-const HOTKEY_LABEL = process.platform === 'darwin' ? 'Ctrl+Shift+Space' : 'Ctrl+Alt+Space';
+/** The default talk hotkey; users can rebind "EchoCode: Talk" in Keyboard Shortcuts. */
+export const HOTKEY_LABEL = process.platform === 'darwin' ? 'Ctrl+Shift+Space' : 'Ctrl+Alt+Space';
 /** Keep a connection warm in the background only while EchoCode is in active use. */
 const WARM_WINDOW_MS = 10 * 60_000;
 const MIN_WARM_INTERVAL_MS = 60_000;
@@ -426,11 +433,12 @@ export class SessionController implements vscode.Disposable {
       this.voiceSeconds += FRAME_MS / 1000;
     } else {
       this.pendingAudio.push(pcm);
-      // Before anyone speaks, only a short pre-roll is worth keeping.
-      if (!this.silence.speechDetected && this.pendingAudio.length > PRE_ROLL_FRAMES) this.pendingAudio.shift();
     }
 
     const ended = this.silence.push(level);
+    // Before anyone speaks, only a short pre-roll is worth keeping.
+    const keep = this.silence.soundHeard ? MAX_UNCONFIRMED_FRAMES : PRE_ROLL_FRAMES;
+    if (!this.silence.speechDetected && this.pendingAudio.length > keep) this.pendingAudio.shift();
     this.openActivityIfSpeaking();
     if (ended && (this.state === 'listening' || this.state === 'connecting')) {
       void this.guarded(() => (this.sessionReady ? this.finishSpeaking() : this.requestFinish()));
@@ -456,7 +464,8 @@ export class SessionController implements vscode.Disposable {
 
   private onInputTranscript(text: string): void {
     if (this.state === 'idle') return;
-    this.userText += text;
+    // A long question arrives as several transcripts ("…I spread" + "Give me…").
+    this.userText = this.userText ? `${this.userText} ${text}` : text;
     this.view.post({ type: 'userTranscript', turnId: this.turnId, text: this.userText });
   }
 

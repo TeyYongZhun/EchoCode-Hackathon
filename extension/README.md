@@ -13,6 +13,8 @@ Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gate
 
 Press the key while EchoCode is talking to interrupt it with a new question.
 
+Click **⚙** in the panel to see your plan and minutes left this month, upgrade to Pro, change the hotkey (it opens Keyboard Shortcuts at **EchoCode: Talk**), or change the panel background.
+
 ## Commands
 
 | Command | What it does |
@@ -30,6 +32,7 @@ Press the key while EchoCode is talking to interrupt it with a new question.
 | `echocode.micDeviceIndex` | `-1` | Microphone to use; `-1` is the system default |
 | `echocode.maxContextLines` | `400` | Lines of the current file sent with each question |
 | `echocode.autoStopSilenceMs` | `2000` | Send automatically after this much silence; `0` turns it off |
+| `echocode.panelBackground` | `midnight` | Panel background: `midnight`, `graphite`, `purple`, `ocean` or `vscode` (follow your theme) |
 
 ## Privacy
 
@@ -37,6 +40,6 @@ Nothing is recorded until you press the hotkey. Your question audio and the surr
 
 ## Free and Pro
 
-The free plan includes 30 minutes of voice a month; the panel shows how many are left. Pro ($10/month) is unlimited.
+Free includes 15 minutes of voice a month, about 20 questions. Pro ($15/month, or $144/year) includes 150 minutes, about 200 questions. The panel's ⚙ Settings shows how many minutes are left.
 
 Source and full documentation: https://github.com/TeyYongZhun/EchoCode_Hackathon

@@ -4,6 +4,7 @@ import { selectMicrophone, testMicrophone } from './audio/micCommands';
 import { EditorTracker } from './context/editorContext';
 import { SessionController } from './SessionController';
 import { AssistantViewProvider } from './ui/AssistantViewProvider';
+import { PanelSettings } from './ui/PanelSettings';
 import { StatusBarRobot } from './ui/statusBar';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -13,6 +14,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // A stable, anonymous id for usage quotas; the raw machine id never leaves VS Code.
   const installId = createHash('sha256').update(vscode.env.machineId).digest('hex').slice(0, 32);
   const controller = new SessionController(view, editors, log, installId);
+  const settings = new PanelSettings(view, installId, log, context.globalState);
   const robot = new StatusBarRobot();
 
   context.subscriptions.push(
@@ -20,6 +22,7 @@ export function activate(context: vscode.ExtensionContext): void {
     view,
     editors,
     controller,
+    settings,
     robot,
     controller.onDidChangeState((state) => robot.update(state)),
     vscode.window.registerWebviewViewProvider(AssistantViewProvider.viewId, view, {

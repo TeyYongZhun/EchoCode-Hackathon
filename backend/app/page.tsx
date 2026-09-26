@@ -39,9 +39,33 @@ const FEATURES = [
   },
 ];
 
-function Robot() {
+const FREE_FEATURES = [
+  '15 minutes of voice a month, about 20 questions*',
+  'Ask out loud and hear the answer',
+  'Lines light up as they are mentioned',
+  'Live subtitles and conversation history',
+  'One-click code cards',
+];
+
+const PRO_FEATURES = [
+  '150 minutes of voice a month, about 200 questions*',
+  'A stronger AI model for code fixes',
+  'Larger code context with every question',
+  'Top up minutes whenever you need more',
+];
+
+/** The EchoCode robot. `waves` adds sound waves on both sides, used for the Pro plan. */
+function Robot({ className = 'mock-robot', waves = false }: { className?: string; waves?: boolean }) {
   return (
-    <svg className="mock-robot" viewBox="0 0 64 64" aria-hidden="true">
+    <svg className={className} viewBox={waves ? '-12 0 88 64' : '0 0 64 64'} aria-hidden="true">
+      {waves && (
+        <>
+          <path d="M1 24q-6 7 0 14" />
+          <path d="M-5 19q-9 12 0 24" />
+          <path d="M63 24q6 7 0 14" />
+          <path d="M69 19q9 12 0 24" />
+        </>
+      )}
       <line x1="32" y1="7" x2="32" y2="14" />
       <circle className="solid" cx="32" cy="5" r="2.6" />
       <rect x="6.5" y="25" width="4.5" height="12" rx="2.2" />
@@ -52,6 +76,14 @@ function Robot() {
       <circle className="solid" cx="38" cy="28.5" r="3" />
       <rect className="solid" x="26" y="39" width="12" height="4" rx="1.5" />
       <line x1="25" y1="52" x2="39" y2="52" />
+    </svg>
+  );
+}
+
+function Check() {
+  return (
+    <svg className="check" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 8.5l3 3 7-7" />
     </svg>
   );
 }
@@ -187,7 +219,7 @@ Vercel · Next.js ── ASSEMBLYAI_API_KEY ──► single-use tokens · LLM G
         </div>
       </section>
 
-      <section>
+      <section id="pricing">
         <div className="wrap">
           <h2>Pricing</h2>
           <p className="section-lede">
@@ -196,26 +228,52 @@ Vercel · Next.js ── ASSEMBLYAI_API_KEY ──► single-use tokens · LLM G
           </p>
           <div className="pricing">
             <div className="plan">
+              <Robot className="plan-icon" />
               <h3>Free</h3>
-              <p className="price">
-                $0 <small>/ month</small>
-              </p>
-              <ul>
-                <li>30 minutes of voice pair programming a month</li>
-                <li>Line highlights and code cards</li>
+              <p className="plan-tagline">Try EchoCode</p>
+              <p className="plan-price">$0</p>
+              <p className="plan-note">Free for everyone</p>
+              <a className="button plan-button" href={DOWNLOAD_URL}>
+                Download the extension
+              </a>
+              <hr />
+              <ul className="plan-features">
+                {FREE_FEATURES.map((feature) => (
+                  <li key={feature}>
+                    <Check />
+                    {feature}
+                  </li>
+                ))}
               </ul>
             </div>
             <div className="plan featured">
-              <h3>Pro</h3>
-              <p className="price">
-                $10 <small>/ month</small>
-              </p>
-              <ul>
-                <li>Unlimited voice sessions</li>
-                <li>Larger codebase context</li>
+              <Robot className="plan-icon" waves />
+              <div className="plan-name">
+                <h3>Pro</h3>
+                <span className="plan-badge">Save 20% yearly</span>
+              </div>
+              <p className="plan-tagline">For everyday learning and coding</p>
+              <p className="plan-price">$12</p>
+              <p className="plan-note">Per month with annual billing ($144 billed up front). $15 if billed monthly.</p>
+              <span className="button secondary plan-button" aria-disabled="true">
+                Coming soon
+              </span>
+              <hr />
+              <p className="plan-features-title">Everything in Free, plus:</p>
+              <ul className="plan-features">
+                {PRO_FEATURES.map((feature) => (
+                  <li key={feature}>
+                    <Check />
+                    {feature}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
+          <p className="pricing-footnote">
+            *Minutes count while a voice session is open; question counts are estimates. For teams and universities,
+            shared minutes and an instructor view are coming next.
+          </p>
         </div>
       </section>
 

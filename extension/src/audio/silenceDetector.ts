@@ -34,6 +34,11 @@ export class SilenceDetector {
     return this.heardSpeech;
   }
 
+  /** At least one frame has been loud enough to be speech, even if it isn't confirmed yet. */
+  get soundHeard(): boolean {
+    return this.loudFrames > 0;
+  }
+
   /** Feeds one frame's level; returns true once the question has ended. */
   push(level: number): boolean {
     // Counted in total rather than in a row, since speech dips between syllables.

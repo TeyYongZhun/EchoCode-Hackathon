@@ -2,7 +2,7 @@
   "name": "echocode",
   "displayName": "EchoCode",
   "description": "Voice-first AI pair programmer: select code, press a hotkey and ask out loud.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "echocode-hackathon",
   "private": true,
   "icon": "media/icon.png",
@@ -129,6 +129,25 @@
           "default": 2000,
           "minimum": 0,
           "description": "Send your question automatically after this many milliseconds of silence. 0 means only the hotkey sends it."
+        },
+        "echocode.panelBackground": {
+          "type": "string",
+          "default": "midnight",
+          "enum": [
+            "midnight",
+            "graphite",
+            "purple",
+            "ocean",
+            "vscode"
+          ],
+          "enumDescriptions": [
+            "Dark navy, the EchoCode default.",
+            "Neutral dark grey.",
+            "Deep purple.",
+            "Dark teal blue.",
+            "Follow your VS Code colour theme."
+          ],
+          "description": "Background of the EchoCode panel. You can also change it from the panel's Settings button."
         }
       }
     }

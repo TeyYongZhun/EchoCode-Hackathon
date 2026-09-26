@@ -10,9 +10,48 @@
   --amber: #ffc34d;
   --magenta: #ff4fd8;
   --danger: #ff6b86;
+  --green: #3ddc84;
   --accent: var(--cyan);
   --level: 0;
   --code-font: var(--vscode-editor-font-family, Consolas, monospace);
+  --code-bg: #05080e;
+}
+
+/* ---- Background themes (Settings → Background) ---- */
+
+body[data-bg='graphite'] {
+  --bg: #17191d;
+  --surface: #212429;
+  --surface-2: #2a2e34;
+  --line: #3a3f47;
+  --code-bg: #101114;
+}
+
+body[data-bg='purple'] {
+  --bg: #1a1030;
+  --surface: #25173f;
+  --surface-2: #2f1e4f;
+  --line: #45306d;
+  --code-bg: #120a22;
+}
+
+body[data-bg='ocean'] {
+  --bg: #062631;
+  --surface: #0b3441;
+  --surface-2: #0f3e4d;
+  --line: #1b5566;
+  --code-bg: #041a21;
+}
+
+/* Follows the VS Code colour theme, light or dark. */
+body[data-bg='vscode'] {
+  --bg: var(--vscode-sideBar-background, #1e1e1e);
+  --surface: var(--vscode-editorWidget-background, #252526);
+  --surface-2: var(--vscode-sideBarSectionHeader-background, var(--surface));
+  --line: var(--vscode-panel-border, #3c3c3c);
+  --text: var(--vscode-foreground, #cccccc);
+  --muted: var(--vscode-descriptionForeground, #9d9d9d);
+  --code-bg: var(--vscode-textCodeBlock-background, var(--surface));
 }
 
 * {
@@ -65,9 +104,6 @@ button {
   align-items: center;
   gap: 14px;
   padding: 10px 14px;
-}
-
-.app.log-open .stage {
   border-top: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(0, 229, 255, 0.04), transparent 70%);
 }
@@ -160,7 +196,7 @@ button {
   padding: 8px 12px;
   border: 1px solid rgba(0, 229, 255, 0.28);
   border-radius: 12px;
-  background: rgba(12, 20, 34, 0.85);
+  background: var(--surface);
   transition: border-color 300ms;
 }
 
@@ -261,12 +297,9 @@ button {
   color: var(--cyan);
 }
 
-.toggle-log {
-  transition: transform 200ms;
-}
-
-.app.log-open .toggle-log {
-  transform: rotate(180deg);
+.controls button[aria-expanded='true'] {
+  border-color: var(--cyan);
+  color: var(--cyan);
 }
 
 .notice {
@@ -284,18 +317,223 @@ button {
   text-decoration: underline;
 }
 
-/* ---- Conversation log (slides up above the stage) ---- */
+/* ---- Conversation log and Settings (above the stage; one at a time) ---- */
 
-.log {
-  display: none;
+.log,
+.settings {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
 }
 
-.app.log-open .log {
-  display: block;
+.log[hidden],
+.settings[hidden] {
+  display: none;
+}
+
+.settings {
+  padding: 4px 14px 12px;
   animation: slide-up 220ms ease-out;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+
+.settings h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.close-settings {
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  background: var(--surface);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.close-settings:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.settings-block {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.settings h3 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.plan-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.plan-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.plan-name[data-plan='pro'] {
+  color: var(--cyan);
+}
+
+.upgrade {
+  padding: 4px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 5px;
+  color: #001216;
+  background: var(--cyan);
+  font-weight: 600;
+}
+
+.change-hotkey {
+  padding: 4px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 5px;
+  color: var(--cyan);
+  background: transparent;
+  font-weight: 600;
+}
+
+.hotkey-name {
+  font-family: var(--code-font);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.usage-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--surface-2);
+}
+
+.usage-bar[hidden] {
+  display: none;
+}
+
+.usage-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--cyan);
+  transition: width 300ms;
+}
+
+.usage-bar[data-low='true'] span {
+  background: var(--amber);
+}
+
+.usage-text {
+  margin: 8px 0 0;
+}
+
+.usage-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.usage-sub:empty {
+  display: none;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+.swatch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface-2);
+  text-align: left;
+}
+
+.swatch:hover {
+  border-color: var(--muted);
+}
+
+.swatch[aria-checked='true'] {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan);
+}
+
+.chip {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+}
+
+.swatch[aria-checked='true'] .chip {
+  border-color: var(--green);
+}
+
+/* A green tick on the selected background. */
+.swatch[aria-checked='true'] .chip::after {
+  position: absolute;
+  top: 1px;
+  left: 4.5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--green);
+  border-width: 0 2px 2px 0;
+  content: '';
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+  transform: rotate(45deg);
+}
+
+/* Each box previews its theme: page colour with a band of its card colour, so the hues are easy to tell apart. */
+.swatch[data-bg='midnight'] .chip {
+  background: linear-gradient(135deg, #070b12 50%, #13233b 50%);
+}
+
+.swatch[data-bg='graphite'] .chip {
+  background: linear-gradient(135deg, #17191d 50%, #3a3f47 50%);
+}
+
+.swatch[data-bg='purple'] .chip {
+  background: linear-gradient(135deg, #1a1030 50%, #5a3d8f 50%);
+}
+
+.swatch[data-bg='ocean'] .chip {
+  background: linear-gradient(135deg, #062631 50%, #1f6b80 50%);
+}
+
+/* VS Code theme has no fixed colour, so its box stays empty. */
+.swatch[data-bg='vscode'] .chip {
+  background: transparent;
 }
 
 .entries {
@@ -367,7 +605,7 @@ button {
   margin: 0;
   padding: 10px 12px;
   overflow: auto;
-  background: #05080e;
+  background: var(--code-bg);
 }
 
 .card code {

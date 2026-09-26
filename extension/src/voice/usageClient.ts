@@ -2,7 +2,7 @@
 export interface Usage {
   plan: 'free' | 'pro';
   usedSeconds: number;
-  /** Null for unlimited (Pro). */
+  /** Null means no limit (older backends sent this for Pro). */
   limitSeconds: number | null;
 }
 
