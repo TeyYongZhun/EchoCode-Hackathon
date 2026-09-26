@@ -47,15 +47,18 @@ function selectedLines(editor: vscode.TextEditor): { startLine: number; endLine:
 /** What a question was about: the document, and the whole lines selected when it was asked. */
 export interface QuestionTarget {
   document: vscode.TextDocument;
+  /** 0-based. */
+  cursorLine: number;
   selection?: { startLine: number; endLine: number; text: string };
 }
 
 export function captureTarget(editor: vscode.TextEditor | undefined): QuestionTarget | undefined {
   if (!editor) return undefined;
+  const cursorLine = editor.selection.active.line;
   const lines = selectedLines(editor);
-  if (!lines) return { document: editor.document };
+  if (!lines) return { document: editor.document, cursorLine };
   const range = new vscode.Range(lines.startLine, 0, lines.endLine, editor.document.lineAt(lines.endLine).text.length);
-  return { document: editor.document, selection: { ...lines, text: editor.document.getText(range) } };
+  return { document: editor.document, cursorLine, selection: { ...lines, text: editor.document.getText(range) } };
 }
 
 /** Builds the [EDITOR CONTEXT] block for the editor the user is looking at. */

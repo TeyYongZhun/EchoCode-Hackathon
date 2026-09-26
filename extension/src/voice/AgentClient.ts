@@ -76,6 +76,10 @@ export class AgentClient {
   private discarding = false;
   /** A reply finished while the key was held, so it's the answer; no nudge needed. */
   private replyCompletedThisQuestion = false;
+  /** The reply in progress has passed on some audio or words. */
+  private replyHasContent = false;
+  /** This question already got one empty reply and a request for another. */
+  private askedAgainAfterEmpty = false;
   private readonly events: AgentClientEvents;
   private readonly log: vscode.LogOutputChannel;
 
@@ -184,6 +188,7 @@ export class AgentClient {
     this.holding = true;
     this.held = [];
     this.replyCompletedThisQuestion = false;
+    this.askedAgainAfterEmpty = false;
   }
 
   /** Streams one 16 kHz microphone frame, converted to 24 kHz and paced to real time. */
@@ -249,17 +254,24 @@ export class AgentClient {
         this.replyActive = true;
         this.discarding = false;
         this.replyCompletedThisQuestion = false;
+        this.replyHasContent = false;
         this.replyText = '';
         // A newer reply supersedes anything kept back from an earlier one.
         if (this.holding) this.held = [];
         break;
       case 'reply.audio': {
         const data = message.data;
-        if (typeof data === 'string' && !this.discarding) this.deliver(() => this.events.audio(data));
+        if (typeof data === 'string' && !this.discarding) {
+          this.replyHasContent = true;
+          this.deliver(() => this.events.audio(data));
+        }
         break;
       }
       case 'transcript.agent.delta':
-        if (typeof message.delta === 'string' && !this.discarding) this.onAgentWord(message.delta, message.start_ms);
+        if (typeof message.delta === 'string' && !this.discarding) {
+          this.replyHasContent = true;
+          this.onAgentWord(message.delta, message.start_ms);
+        }
         break;
       case 'transcript.user':
         if (typeof message.text === 'string' && message.text.trim()) this.events.inputTranscript(message.text.trim());
@@ -277,6 +289,8 @@ export class AgentClient {
             this.events.interrupted();
             this.armReplyFallback();
           }
+        } else if (!this.replyHasContent) {
+          this.onEmptyReply(message.status);
         } else if (this.holding) {
           this.replyCompletedThisQuestion = true;
           this.held.push(() => this.events.turnComplete());
@@ -288,6 +302,24 @@ export class AgentClient {
         this.log.warn(`AssemblyAI error ${String(message.code)}: ${String(message.message)}`);
         break;
     }
+  }
+
+  /**
+   * A reply ended without a word or a sound. Seen after interrupting EchoCode
+   * with a new question: taken as the answer, it silently ended the question.
+   * Ask for a real answer once; a second empty one does end the question.
+   */
+  private onEmptyReply(status: unknown): void {
+    this.log.info(`A reply ended with nothing in it (status: ${String(status)})`);
+    // While the key is held the question isn't finished; release asks for a reply if none comes.
+    if (this.holding) return;
+    if (this.askedAgainAfterEmpty) {
+      this.events.turnComplete();
+      return;
+    }
+    this.askedAgainAfterEmpty = true;
+    this.log.info('Asking for the answer again');
+    this.send({ type: 'reply.create' });
   }
 
   /**

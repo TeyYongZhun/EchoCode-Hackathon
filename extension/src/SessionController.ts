@@ -184,10 +184,12 @@ export class SessionController implements vscode.Disposable {
   /** Cancels whatever is happening and goes quiet. */
   async stop(): Promise<void> {
     const hadActivity = this.activityOpen;
+    const was = this.state;
     this.turnId++;
     this.clearTimers();
     this.view.post({ type: 'flushAudio' });
     this.setState('idle');
+    this.view.post({ type: 'stopped', was });
     this.activityOpen = false;
     this.sessionReady = false;
     this.clearHighlights();
@@ -573,6 +575,14 @@ export class SessionController implements vscode.Disposable {
     if (this.state !== 'thinking' && this.state !== 'speaking') return;
     const turn = this.turnId;
     this.lastActivityAt = Date.now();
+    if (!this.sawAudio && !this.modelText.trim()) {
+      // Still nothing after asking again: say so rather than go quietly back to Ready.
+      this.log.warn(`Turn ${turn}: the voice agent's answer was empty`);
+      clearTimeout(this.replyTimer);
+      this.setState('idle');
+      this.view.post({ type: 'error', message: NO_REPLY });
+      return;
+    }
     this.view.post({ type: 'turnComplete', turnId: turn });
     this.log.info(`Turn ${turn} complete. You: "${this.userText.trim()}" / EchoCode: "${this.modelText.trim()}"`);
     this.scheduleHighlights(true);

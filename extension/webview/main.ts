@@ -26,6 +26,14 @@ const STATUS: Record<SessionState, string> = {
   thinking: 'Thinking',
   speaking: 'Speaking',
 };
+/** What the bubble says after Stop, by what EchoCode was doing when it was pressed. */
+const STOPPED: Record<SessionState, string> = {
+  idle: 'Stopped.',
+  connecting: 'Stopped listening. Your question was cancelled.',
+  listening: 'Stopped listening. Your question was cancelled.',
+  thinking: 'Stopped. The answer was cancelled.',
+  speaking: 'Stopped the answer.',
+};
 /** How long the last subtitle stays after an answer before the hint returns. */
 const SUBTITLE_LINGER_MS = 5000;
 /** Show each subtitle a moment before its words are heard. */
@@ -379,6 +387,13 @@ function onMessage(message: ToWebview): void {
     case 'state':
       onState(message.state);
       break;
+    case 'stopped':
+      // Say what Stop did, then go back to the usual hint.
+      cancelSubtitles();
+      window.clearTimeout(lingerTimer);
+      setBubble(STOPPED[message.was], '', 'hint');
+      lingerTimer = window.setTimeout(showHint, SUBTITLE_LINGER_MS);
+      break;
     case 'micLevel':
       micLevel = message.level;
       break;
@@ -471,6 +486,24 @@ openSettings.addEventListener('click', () => setSettingsOpen(settings.hidden));
 $('.close-settings').addEventListener('click', () => setSettingsOpen(false));
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !settings.hidden) setSettingsOpen(false);
+});
+
+// The talk hotkey (Ctrl+Alt+Space) contains Space, which also "presses" a focused
+// button: after clicking Stop, every hotkey press stopped EchoCode again. So a
+// mouse click doesn't leave a button focused...
+app.addEventListener('mousedown', (event) => {
+  if ((event.target as HTMLElement).closest('button')) event.preventDefault();
+});
+// ...and Space pressed with a modifier never presses a button, even one reached with Tab.
+// Space activates a button on keyup, when the modifiers may already be released.
+let spaceWithModifier = false;
+document.addEventListener('keydown', (event) => {
+  if (event.key === ' ') spaceWithModifier = event.ctrlKey || event.altKey || event.metaKey;
+});
+document.addEventListener('keyup', (event) => {
+  if (event.key !== ' ' || !spaceWithModifier) return;
+  spaceWithModifier = false;
+  event.preventDefault();
 });
 upgradeButton.addEventListener('click', () => vscode.postMessage({ type: 'openPricing' }));
 $('.change-hotkey').addEventListener('click', () => vscode.postMessage({ type: 'openKeybindings' }));

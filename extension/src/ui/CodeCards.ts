@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
+import { findDeclarationToReplace, reindent } from '../context/declarations';
 import type { EditorTracker, QuestionTarget } from '../context/editorContext';
 import type { Suggestion } from '../voice/suggestionClient';
 import type { CodeCard } from '../protocol';
+
+const documentLines = (document: vscode.TextDocument) => document.getText().split(/\r?\n/);
 
 interface StoredCard {
   card: CodeCard;
@@ -21,6 +24,12 @@ export class CodeCards {
   add(turnId: number, suggestion: Suggestion, target: QuestionTarget | undefined): CodeCard {
     const selection = target?.selection;
     const replaceSelection = suggestion.replaceSelection && selection !== undefined;
+    // With nothing to replace, a card holding a whole method replaces that method, not the cursor line.
+    const declaration =
+      !replaceSelection && target
+        ? findDeclarationToReplace(documentLines(target.document), suggestion.code, target.cursorLine)
+        : undefined;
+    const replaced = replaceSelection && selection ? selection : declaration;
     const card: CodeCard = {
       id: `card-${this.nextId++}`,
       turnId,
@@ -28,7 +37,7 @@ export class CodeCards {
       language: suggestion.language,
       code: suggestion.code,
       replaceSelection,
-      replaceLines: replaceSelection && selection ? { start: selection.startLine + 1, end: selection.endLine + 1 } : undefined,
+      replaceLines: replaced ? { start: replaced.startLine + 1, end: replaced.endLine + 1 } : undefined,
     };
     this.cards.set(card.id, { card, target });
     return card;
@@ -42,9 +51,9 @@ export class CodeCards {
   }
 
   /**
-   * Replaces the lines that were selected when the question was asked, or
-   * inserts at the cursor when the card isn't a replacement (or those lines
-   * have changed since).
+   * Replaces the lines that were selected when the question was asked, or the
+   * method the card's code is a new version of; otherwise (or if the selected
+   * lines have changed since) inserts at the cursor.
    */
   async insert(id: string): Promise<void> {
     const stored = this.cards.get(id);
@@ -65,6 +74,14 @@ export class CodeCards {
       const lines = new vscode.Range(selection.startLine, 0, selection.endLine, document.lineAt(selection.endLine).text.length);
       if (document.getText(lines) === selection.text) range = lines;
       else void vscode.window.showInformationMessage('EchoCode: those lines have changed, so the code was inserted at the cursor instead.');
+    }
+    if (!range && !card.replaceSelection) {
+      // Looked up again now, since the file may have changed since the card was made.
+      const declaration = findDeclarationToReplace(documentLines(document), card.code, editor.selection.active.line);
+      if (declaration) {
+        range = new vscode.Range(declaration.startLine, 0, declaration.endLine, document.lineAt(declaration.endLine).text.length);
+        text = reindent(card.code, /^\s*/.exec(document.lineAt(declaration.startLine).text)![0]);
+      }
     }
     if (!range) {
       const cursor = editor.selection.active;

@@ -48,7 +48,7 @@ public class LinkedList<T> {
         LinkedList<String> tasks = new LinkedList<>();
         tasks.addLast("write tests");
         tasks.addLast("fix bug");
-        System.out.println("Removed: " + tasks.removeLast());
+        System.out.println("Removed: " );
         System.out.println("Removed: " + tasks.removeLast()); // crashes here
     }
 }

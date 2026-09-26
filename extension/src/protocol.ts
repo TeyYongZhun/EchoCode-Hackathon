@@ -14,7 +14,7 @@ export interface CodeCard {
   code: string;
   /** True when inserting replaces the lines that were selected when the question was asked. */
   replaceSelection: boolean;
-  /** The 1-based lines a replacement covers, for the button label. */
+  /** The 1-based lines a replacement covers, for the button label: the selection, or the method the code rewrites. */
   replaceLines?: { start: number; end: number };
 }
 
@@ -22,6 +22,8 @@ export type ToWebview =
   /** Sent once the panel loads: how to describe the hotkey on this platform. */
   | { type: 'hello'; hotkey: string }
   | { type: 'state'; state: SessionState }
+  /** The user pressed Stop; `was` is what EchoCode was doing at the time. */
+  | { type: 'stopped'; was: SessionState }
   /** Microphone loudness, 0–1, about 15 times a second while listening. */
   | { type: 'micLevel'; level: number }
   /** A chunk of the spoken reply: base64 16-bit PCM, mono, 24 kHz. */

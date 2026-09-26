@@ -176,6 +176,57 @@ test('a reply cut short after release is reported, and a new one is requested if
   }
 });
 
+test('an empty answer after interrupting is not taken as the answer: EchoCode asks again', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    h.client.endActivity();
+    await h.serverSends(started, audio('a1'));
+    // Interrupted mid-answer with a new question.
+    h.client.cancelReply();
+    h.client.startActivity();
+    h.client.endActivity();
+    // The old reply is cut off, then a reply with no words or audio arrives.
+    await h.serverSends(interrupted, started, completed);
+    assert.deepEqual(h.seen, ['audio:a1'], 'an empty reply does not end the question');
+    await sleep(50);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+    // The real answer then plays as usual.
+    await h.serverSends(started, audio('b1'), word('Here.'), completed);
+    assert.deepEqual(h.seen, ['audio:a1', 'audio:b1', 'word:Here.', 'done']);
+  } finally {
+    h.close();
+  }
+});
+
+test('a second empty answer ends the question instead of asking forever', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    h.client.endActivity();
+    await h.serverSends(started, completed, started, completed);
+    assert.deepEqual(h.seen, ['done']);
+    await sleep(50);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+  } finally {
+    h.close();
+  }
+});
+
+test('an empty answer while the key is held is ignored, and release asks for a reply', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    await h.serverSends(started, completed);
+    h.client.endActivity();
+    assert.deepEqual(h.seen, []);
+    await sleep(1800);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+  } finally {
+    h.close();
+  }
+});
+
 test('Stop right after sending a question does not ask for a reply', async () => {
   const h = await connect();
   try {
