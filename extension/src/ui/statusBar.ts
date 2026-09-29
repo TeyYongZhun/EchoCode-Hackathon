@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { SessionState } from '../protocol';
 
 const APPEARANCE: Record<SessionState, { text: string; tooltip: string; background?: string }> = {
+  asleep: { text: '$(robot) EchoCode', tooltip: 'EchoCode is asleep. Click (or press your EchoCode hotkey) to wake it.' },
   idle: { text: '$(robot) EchoCode', tooltip: 'EchoCode: click (or press your EchoCode hotkey) and ask about your code' },
   connecting: { text: '$(loading~spin) Connecting…', tooltip: 'Connecting to AssemblyAI. Keep talking; click when done.' },
   listening: {

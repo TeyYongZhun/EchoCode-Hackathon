@@ -44,3 +44,56 @@ test('reports where each reference ends, so a half-streamed number can wait', ()
   const [ref] = findLineReferences(text);
   assert.equal(ref.endOffset, text.length);
 });
+
+// ---- File names heard in an answer -----------------------------------------
+
+const PROJECT = ['index.html', 'style.css', 'script.js', 'src/LinkedList.java', 'src/util/helpers.ts'];
+const files = (text: string, paths = PROJECT) => findLineReferences(text, paths).map((r) => r.file);
+
+test('a file named after the line number marks that file', () => {
+  assert.deepEqual(files('You can change it on line 12 of style.css.'), ['style.css']);
+});
+
+test('a file named before the line number marks it too', () => {
+  assert.deepEqual(files('In style.css, line 12 sets the font.'), ['style.css']);
+});
+
+test('spoken file names match however the punctuation came through', () => {
+  assert.deepEqual(files('Look at line 12 of style dot c s s.'), ['style.css']);
+  assert.deepEqual(files('Look at line 12 of style css.'), ['style.css']);
+  assert.deepEqual(files('Look at line 12 of style dot css.'), ['style.css']);
+});
+
+test('one file name covers the lines said with it', () => {
+  assert.deepEqual(files('In style.css, lines 4 and 9 both set a colour.'), ['style.css']);
+  assert.deepEqual(files('In script.js, line 3 calls it, and line 40 defines it.'), ['script.js', 'script.js']);
+});
+
+test('a file in a folder is matched by name or by path', () => {
+  assert.deepEqual(files('That is line 34 of LinkedList.java.'), ['src/LinkedList.java']);
+  assert.deepEqual(files('That is line 34 of src slash LinkedList dot java.'), ['src/LinkedList.java']);
+  assert.deepEqual(files('The helpers file, line 8, exports it.'), ['src/util/helpers.ts']);
+});
+
+test('no file named means the file they are looking at', () => {
+  assert.deepEqual(files('The crash happens on line 34.'), [undefined]);
+  // Unchanged when the caller has no project to match against.
+  assert.deepEqual(findLineReferences('On line 12 of style.css.').map((r) => r.file), [undefined]);
+});
+
+test('a file named far from the line number is not attached to it', () => {
+  const text = `We opened style.css earlier and it was fine. ${'Everything else looks right so far. '.repeat(3)}Now look at line 12.`;
+  assert.deepEqual(files(text), [undefined]);
+});
+
+test('a name that could mean two files marks neither', () => {
+  const ambiguous = ['app/index.js', 'lib/index.js', 'style.css'];
+  assert.deepEqual(files('Check line 5 of index.js.', ambiguous), [undefined]);
+  // The full path still tells them apart.
+  assert.deepEqual(files('Check line 5 of app slash index dot js.', ambiguous), ['app/index.js']);
+});
+
+test('the longest matching name wins, so an extension is not dropped', () => {
+  const both = ['style.css', 'style.css.map'];
+  assert.deepEqual(files('See line 2 of style dot css dot map.', both), ['style.css.map']);
+});

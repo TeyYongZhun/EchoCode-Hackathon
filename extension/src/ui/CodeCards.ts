@@ -9,6 +9,8 @@ const documentLines = (document: vscode.TextDocument) => document.getText().spli
 interface StoredCard {
   card: CodeCard;
   target: QuestionTarget | undefined;
+  /** Another project file the answer was about; the code belongs there, not in the open file. */
+  inFile: vscode.Uri | undefined;
 }
 
 /** Keeps the code cards shown in the panel and carries out Insert at Cursor and Copy. */
@@ -21,12 +23,15 @@ export class CodeCards {
     this.editors = editors;
   }
 
-  add(turnId: number, suggestion: Suggestion, target: QuestionTarget | undefined): CodeCard {
+  add(turnId: number, suggestion: Suggestion, target: QuestionTarget | undefined, inFile?: vscode.Uri): CodeCard {
     const selection = target?.selection;
-    const replaceSelection = suggestion.replaceSelection && selection !== undefined;
+    // A selection lives in the file they were looking at, so it can't be replaced in another one.
+    const elsewhere = inFile !== undefined && inFile.toString() !== target?.document.uri.toString();
+    const replaceSelection = suggestion.replaceSelection && selection !== undefined && !elsewhere;
     // With nothing to replace, a card holding a whole method replaces that method, not the cursor line.
+    // The line numbers on the button describe the open file, so only look there.
     const declaration =
-      !replaceSelection && target
+      !replaceSelection && target && !elsewhere
         ? findDeclarationToReplace(documentLines(target.document), suggestion.code, target.cursorLine)
         : undefined;
     const replaced = replaceSelection && selection ? selection : declaration;
@@ -39,7 +44,7 @@ export class CodeCards {
       replaceSelection,
       replaceLines: replaced ? { start: replaced.startLine + 1, end: replaced.endLine + 1 } : undefined,
     };
-    this.cards.set(card.id, { card, target });
+    this.cards.set(card.id, { card, target, inFile: elsewhere ? inFile : undefined });
     return card;
   }
 
@@ -58,8 +63,13 @@ export class CodeCards {
   async insert(id: string): Promise<void> {
     const stored = this.cards.get(id);
     if (!stored) return;
-    const { card, target } = stored;
-    const document = target && !target.document.isClosed ? target.document : this.editors.editor?.document;
+    const { card, target, inFile } = stored;
+    // Code for another project file goes into that file, never into whatever happens to be open.
+    const document = inFile
+      ? await vscode.workspace.openTextDocument(inFile)
+      : target && !target.document.isClosed
+        ? target.document
+        : this.editors.editor?.document;
     if (!document) {
       void vscode.window.showWarningMessage('EchoCode: open the file you want to insert the code into.');
       return;

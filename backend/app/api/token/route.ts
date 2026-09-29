@@ -1,4 +1,4 @@
-import { AGENT_WS_URL, SESSION_CONFIG } from '@/lib/agentConfig';
+import { AGENT_WS_URL, GREETING, SESSION_CONFIG } from '@/lib/agentConfig';
 import { assemblyAiKey, createAgentToken } from '@/lib/assemblyai';
 import {
   allowTokenRequest,
@@ -59,6 +59,7 @@ export async function POST(request: Request): Promise<Response> {
       token,
       url: AGENT_WS_URL,
       session: SESSION_CONFIG,
+      greeting: GREETING,
       expiresAt: new Date(Date.now() + TOKEN_REDEEM_SECONDS * 1000).toISOString(),
       usage,
     });

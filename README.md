@@ -12,14 +12,14 @@
 
 EchoCode is a VS Code extension that lets you ask about your code out loud and hear the answer, like pair programming with a senior engineer.
 
-**[Landing page](https://echo-code-hackathon.vercel.app)** · **[Download the extension](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest)** · **[Try it in 2 minutes](#try-it)**
+**[Landing page](https://echo-code-hackathon.vercel.app)** · **[Download the extension](https://github.com/TeyYongZhun/EchoCode-Hackathon/releases/latest)** · **[Try it in 2 minutes](#try-it)**
 
 ---
 
 ## In 30 seconds
 
 - **The problem:** asking an AI about your code means typing long prompts and copy-pasting code into a chat window. Students skip it and paste answers they don't understand.
-- **Our solution:** select the confusing code, hold one key, and ask out loud. EchoCode answers by voice, highlights the lines it's talking about, and hands you the fix as one-click code.
+- **Our solution:** hold one key and ask out loud. EchoCode reads your whole project, answers by voice, opens the file it is talking about and lights up the lines, then hands you the fix as one-click code.
 - **Built on AssemblyAI:** the **Voice Agent API** runs the spoken conversation, and the **LLM Gateway** writes the code for suggested fixes.
 - **Who it's for:** computer science students and junior developers who learn best by talking a problem through.
 
@@ -35,11 +35,11 @@ It's so much effort that many people give up and paste in code they don't unders
 
 ## How it works
 
-1. **Select** the code you're curious about.
-2. **Hold Ctrl+Alt+Space and ask** out loud: *"Why is this so slow?"* Let go to send.
-3. **Listen and apply.** A senior-engineer voice explains, the lines it mentions light up in your editor, and a suggested fix appears with a **Replace lines** button.
+1. **Wake it.** Press Ctrl+Alt+Space once. EchoCode says hello and stays ready.
+2. **Hold the same key and ask** out loud: *"Why is this so slow?"* or *"Where do I change the font?"* Let go to send. Select some code first if your question is about a particular part.
+3. **Listen and apply.** A senior-engineer voice explains, the lines it mentions light up — opening another file when the answer lives there — and a suggested fix appears with a **Replace lines** button.
 
-EchoCode already knows which file you're in, where your cursor is, what you selected and any compiler errors, so you never copy-paste anything.
+EchoCode already knows which file you're in, where your cursor is, what you selected, any compiler errors, and the other files in your project, so you never copy-paste anything.
 
 ## Key features
 
@@ -47,17 +47,18 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 |---|---|
 | 🎙️ **Talk, don't type** | Hold a key and ask, like asking a colleague. Nothing is recorded until you press it. |
 | 📄 **Knows your code** | Your file, selection and errors go with every question automatically. |
+| 📁 **Knows your project** | The other files go too, so "where do I change the font?" finds `style.css`, opens it and lights up the line. |
 | 🔦 **Points at the code** | Lines light up at the moment they're mentioned in the answer. |
 | ⚡ **One-click fixes** | Suggested code appears as a card: **Replace lines** or **Insert at Cursor**. |
 | ✋ **Interrupt any time** | Press the key mid-answer to ask something else. |
-| 💬 **Live subtitles** | The spoken answer appears as subtitles, with the full conversation always visible above it. |
+| 💬 **Read along** | The answer appears in the conversation as it is spoken. The robot shows only what it is doing: listening, thinking, speaking. |
 | ⚙️ **Your settings** | See your plan and minutes left, change the hotkey, and pick a panel background. |
 
 ## How EchoCode uses AssemblyAI
 
 | AssemblyAI product | What it does in EchoCode |
 |---|---|
-| **Voice Agent API** | Runs the whole spoken conversation in one streaming session: it hears the question, reasons over your code and speaks the answer. Coding **key terms** (HashSet, generics, null pointer…) improve recognition, **semantic turn detection** knows when you've finished, **interruptions** are built in, and **word-level timing** drives the live subtitles and line highlights. |
+| **Voice Agent API** | Runs the whole spoken conversation in one streaming session: it hears the question, reasons over your code and speaks the answer. Coding **key terms** (HashSet, generics, null pointer…) improve recognition, **semantic turn detection** knows when you've finished, **interruptions** are built in, and **word-level timing** lights up each line at the moment it is spoken. |
 | **LLM Gateway** | Writes the exact code behind a suggested fix as JSON, using `qwen3.5-4b-32k-fast` (set `ASSEMBLYAI_SUGGEST_MODEL` to use a stronger model your account has access to). It runs after the voice answer, so it never slows the conversation down. |
 | **Single-use tokens** | Our backend keeps the AssemblyAI API key secret and gives the extension a short-lived token for each conversation. |
 
@@ -77,7 +78,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 | Plan | Price | Voice minutes | Includes |
 |---|---|---|---|
-| Free | $0 | 15 a month, about 20 questions | Spoken answers, line highlights, live subtitles, one-click code cards |
+| Free | $0 | 15 a month, about 20 questions | Spoken answers, project-wide questions, line highlights, one-click code cards |
 | Pro | $15/month, or $144/year | 150 a month, about 200 questions | Everything in Free, plus a stronger AI model for code fixes, larger code context and minute top-ups |
 
 - **Teams and universities (coming next):** shared minutes for companies, and a campus plan with an instructor view showing which concepts students struggle with.
@@ -87,10 +88,11 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the right panel; older versions show it in the Explorer) and a microphone. Headphones help. No API key is needed.
 
-1. **Install:** download `echocode-0.1.2.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode_Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
+1. **Install:** download `echocode-0.1.3.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode-Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
 2. **Open the demo:** download this repository and open its `demo/` folder in VS Code.
 3. **Check your mic:** press **Ctrl+Shift+P** and run **EchoCode: Test Microphone**.
-4. **Ask:** open a demo file, select the code below, click inside the editor, then **hold Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS), ask, and let go. You can also click **🤖 EchoCode** in the status bar instead.
+4. **Wake EchoCode:** press **Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS) once. It says hello, and stays ready.
+5. **Ask:** open a demo file, select the code below, click inside the editor, then **hold** the same key, ask, and let go. You can also click **🤖 EchoCode** in the status bar instead.
 
 | Demo file | Select | Ask |
 |---|---|---|
@@ -99,6 +101,14 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
 
 The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
+
+## What's new in 0.1.3
+
+- **Answers about your whole project.** Ask "where do I change the font?" while looking at `index.html` and EchoCode finds the rule in `style.css`, opens that file and highlights the line. Tested live on a small web app: 9 of 9 questions landed on the right file and line.
+- **Wakes with a hello.** EchoCode starts asleep and connects to nothing. One press of the hotkey wakes it, and because the connection happens while it greets you, the first real question answers in about 1.1 seconds instead of 2.2.
+- **Plainer answers.** Two to four short sentences, a technical term explained the first time it is used, and no check-up question tacked onto every answer. Ask it to just fix something and it does.
+- **A calmer panel.** The robot's bubble shows only what EchoCode is doing — Asleep, Listening, Thinking, Speaking — while the words appear in the conversation above it.
+- **A microphone notice on first install**, with a button that runs the microphone test.
 
 ## Tech stack
 
@@ -120,7 +130,7 @@ EchoCode-Hackathon/
 │   │   ├── extension.ts          starts EchoCode
 │   │   ├── SessionController.ts  runs each voice question
 │   │   ├── audio/                microphone and resampling
-│   │   ├── context/              editor context, line numbers
+│   │   ├── context/              editor and project context, line and file references
 │   │   ├── voice/                AssemblyAI client, API calls
 │   │   └── ui/                   panel, highlights, code cards
 │   ├── webview/                  panel UI and audio playback
@@ -191,10 +201,10 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | Where | Command | What it does |
 |---|---|---|
 | `extension/` | `npm run dev` | Builds EchoCode and opens VS Code on `demo/` with it loaded |
-| `extension/` | `npm test` | Unit tests: editor context, line references, subtitles, hotkey handling, audio and resampling |
+| `extension/` | `npm test` | Unit tests: editor and project context, line and file references, conversation memory, where code is inserted, hotkey handling, audio and resampling |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the window to pick up changes) |
-| `extension/` | `npm run package` | Builds `echocode-0.1.2.vsix` with the microphone library for every platform |
+| `extension/` | `npm run package` | Builds `echocode-0.1.3.vsix` with the microphone library for every platform |
 | `backend/` | `npm run dev` | Runs the backend at http://localhost:3000 |
 | `backend/` | `npm run smoke` | Asks the Voice Agent one question through the backend and reports the reply and latency |
 | `backend/` | `npm run build` | Production build of the backend and landing page |
@@ -203,7 +213,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 |---|---|---|
 | `echocode.backendUrl` | `https://echo-code-hackathon.vercel.app` | The backend that issues session tokens |
 | `echocode.micDeviceIndex` | `-1` | Microphone to record from; `-1` is the system default |
-| `echocode.maxContextLines` | `400` | Lines of the current file sent with each question |
+| `echocode.maxContextLines` | `400` | Lines of the open file sent with each question. The other project files go alongside it, within a 45 KB budget |
 | `echocode.autoStopSilenceMs` | `2000` | Send automatically after this much silence; `0` turns it off |
 | `echocode.panelBackground` | `midnight` | Panel background: `midnight`, `graphite`, `purple`, `ocean` or `vscode` (follow your theme). Also in the panel's ⚙ Settings |
 
@@ -214,8 +224,11 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 
 - **Microphone:** VS Code's panels can't use the microphone, so the extension records 16 kHz audio with PvRecorder in a background thread. It resamples the audio to the 24 kHz the Voice Agent expects. Audio recorded while connecting, or before speech is confirmed, is sent at up to twice real time until it catches up with your voice: tested live, the Voice Agent hears it all and answers sooner, while sending much faster gains nothing.
 - **Editor context:** each question carries the file path, language, cursor line, selection, the surrounding code with line numbers, and nearby compiler errors, up to 400 lines.
+- **Project context:** the other source files in the open folder go too, so EchoCode can answer about code that isn't on screen. Measured against the live Voice Agent, a `session.update` much over **64 KB is rejected** with an unhelpful "Internal service error", while everything under it costs only about 150 ms — so EchoCode keeps the whole context under 45 KB. A small project (a student's web app is typically under 1,500 lines) is sent in full; a bigger one sends the files the open one references, then its neighbours, and names the rest. `node_modules`, `.git` and build output are always skipped, and unsaved edits are used over what's on disk.
+- **Pointing at another file:** when the agent says "line 12 of style.css", EchoCode matches the spoken name against the project's real filenames — "style dot c s s" and "style css" both resolve — then opens that file without stealing keyboard focus and highlights the line. A name that could mean two files highlights neither, and a code card for another file inserts there rather than into whatever is open.
+- **Waking up:** EchoCode connects to nothing until you first press the key, because AssemblyAI bills for the time a session is open. That first press opens the session and the agent says hello, which covers the two seconds connecting takes. Measured live, the first real question then starts answering in about 1.1 s instead of 2.2 s, because the session is already open.
 - **Push-to-talk:** nothing is sent until you press the key, and if you don't speak, nothing is sent at all. Once you start speaking, the audio from half a second before is kept too, so a quiet first word isn't cut off. When you let go, a short tail of silence lets the Voice Agent's turn detection close the question. If no reply has started 1.2 seconds after the Voice Agent has the whole question, EchoCode asks for one directly. It never asks earlier, because asking before the question is fully heard gets an empty answer.
-- **Line highlights:** the agent names lines out loud ("on line twenty-one"). The extension finds those references in the transcript and highlights each line when its word plays, using the Voice Agent's word timing.
+- **Line highlights:** the agent names lines out loud ("on line twenty-one"). The extension finds those references in the transcript and highlights each line when its word plays, using the Voice Agent's word timing, in whichever file was named.
 - **One setup for everyone:** the prompt, voice, coding key terms and audio settings live in `backend/lib/agentConfig.ts`, and every session starts with them.
 - **Reconnects:** a dropped connection resumes the same conversation if it's back within 30 seconds. When EchoCode has to start a fresh session instead (after a few idle minutes, or when you interrupt an answer), it passes the last few questions and answers to the new one, so the conversation carries on.
 - **Interrupting:** tested live, the Voice Agent keeps playing an answer on its side after EchoCode silences it, and throws away a short question asked over it; the API can't cancel an answer. So pressing the key (or Stop) while an answer is still arriving ends that session, and your question goes to a fresh one, connected while you talk.

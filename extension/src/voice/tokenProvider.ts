@@ -8,6 +8,8 @@ export interface SessionTicket {
   url: string;
   /** Sent as the first session.update: prompt, voice, keyterms, audio formats. */
   session: Record<string, unknown>;
+  /** What the agent says when EchoCode first wakes up, if the session asks for a greeting. */
+  greeting?: string;
   expiresAt: string;
   /** This month's usage; null or missing when the backend doesn't meter. */
   usage?: Usage | null;

@@ -22,6 +22,11 @@ const RELEASE_SILENCE_MS = 320;
 const REPLY_FALLBACK_MS = 1200;
 /** If AssemblyAI still hasn't finished hearing the question this long after release, ask anyway. */
 const HEARING_TIMEOUT_MS = 4000;
+/**
+ * Said on waking when the backend doesn't supply one. Without a fallback, an
+ * older backend leaves EchoCode waiting for a greeting that can never arrive.
+ */
+const DEFAULT_GREETING = "Hey, I'm EchoCode. Ask me anything about the code in this project.";
 const MIC_RATE = 16_000;
 const AGENT_RATE = 24_000;
 const SILENCE_FRAME = Buffer.alloc((AGENT_RATE / 1000) * 32 * 2).toString('base64'); // 32 ms at 24 kHz
@@ -117,8 +122,10 @@ export class AgentClient {
   /**
    * Opens a session and resolves once AssemblyAI reports it ready. Resumes the
    * previous session when possible; throws ResumeFailedError if that fails.
+   * With `greet`, the agent says the ticket's greeting as soon as it's ready
+   * (AssemblyAI only accepts a greeting in the session's first update).
    */
-  async connect(ticket: SessionTicket): Promise<void> {
+  async connect(ticket: SessionTicket, greet = false): Promise<void> {
     this.close(false);
     const resumeId = this.canResume ? this.sessionId : undefined;
     const prompt = ticket.session.system_prompt;
@@ -147,9 +154,10 @@ export class AgentClient {
         resumeId ? new ResumeFailedError(message) : new Error(`AssemblyAI: ${message}`);
 
       socket.on('open', () => {
+        const session = greet ? { ...ticket.session, greeting: ticket.greeting || DEFAULT_GREETING } : ticket.session;
         const first = resumeId
           ? { type: 'session.resume', session_id: resumeId }
-          : { type: 'session.update', session: ticket.session };
+          : { type: 'session.update', session };
         socket.send(JSON.stringify(first));
       });
       socket.on('message', (raw) => {

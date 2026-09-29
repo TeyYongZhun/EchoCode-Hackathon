@@ -18,20 +18,25 @@ interface Harness {
   serverSends(...messages: object[]): Promise<void>;
   /** Like serverSends, without the user transcript it uses to sync (for tests about transcripts). */
   serverSendsOnly(...messages: object[]): Promise<void>;
+  /** The session object of the first session.update sent, for greeting checks. */
+  opened: { session?: { greeting?: string } };
   close(): void;
 }
 
 /** Connects an AgentClient to a local stand-in for AssemblyAI's Voice Agent. */
-async function connect(): Promise<Harness> {
+async function connect(options: { greet?: boolean; greeting?: string } = {}): Promise<Harness> {
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(server, 'listening');
   const sent: string[] = [];
+  const opened: { session?: { greeting?: string } } = {};
   let serverSocket: WebSocket | undefined;
   server.on('connection', (socket) => {
     serverSocket = socket;
     socket.on('message', (raw) => {
-      const type = (JSON.parse(raw.toString()) as { type: string }).type;
+      const message = JSON.parse(raw.toString()) as { type: string; session?: { greeting?: string } };
+      const type = message.type;
       sent.push(type);
+      if (sent.length === 1) opened.session = message.session;
       if (sent.length === 1) socket.send(JSON.stringify({ type: 'session.ready', session_id: 'test-session' }));
     });
   });
@@ -52,13 +57,17 @@ async function connect(): Promise<Harness> {
     log,
   );
   const { port } = server.address() as AddressInfo;
-  await client.connect({ token: 'test', url: `ws://127.0.0.1:${port}`, session: { system_prompt: 'test' }, expiresAt: '' });
+  await client.connect(
+    { token: 'test', url: `ws://127.0.0.1:${port}`, session: { system_prompt: 'test' }, expiresAt: '', greeting: options.greeting },
+    options.greet,
+  );
 
   let syncs = 0;
   return {
     client,
     seen,
     sent,
+    opened,
     async serverSends(...messages) {
       marker = `sync-${++syncs}`;
       const handled = new Promise<void>((resolve) => (synced = resolve));
@@ -263,6 +272,32 @@ test('an answer whose words never arrived one by one still shows its full text',
     h.client.endActivity();
     await h.serverSends(started, word('Yes.'), { type: 'transcript.agent', text: 'Yes.' }, completed);
     assert.deepEqual(h.seen.slice(3), ['word:Yes.', 'done']);
+  } finally {
+    h.close();
+  }
+});
+
+test('waking asks for a greeting, and falls back to its own when the backend sends none', async () => {
+  // A backend without the greeting once left EchoCode waiting 20 s for a reply that never came.
+  const fallback = await connect({ greet: true });
+  try {
+    assert.match(fallback.opened.session?.greeting ?? '', /EchoCode/);
+  } finally {
+    fallback.close();
+  }
+
+  const fromBackend = await connect({ greet: true, greeting: 'Morning! What are we looking at?' });
+  try {
+    assert.equal(fromBackend.opened.session?.greeting, 'Morning! What are we looking at?');
+  } finally {
+    fromBackend.close();
+  }
+});
+
+test('an ordinary question asks for no greeting, so reconnects stay silent', async () => {
+  const h = await connect({ greeting: 'Morning!' });
+  try {
+    assert.equal(h.opened.session?.greeting, undefined);
   } finally {
     h.close();
   }

@@ -1,6 +1,6 @@
 /** Messages exchanged between the extension host and the assistant webview. */
 
-export type SessionState = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
+export type SessionState = 'asleep' | 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking';
 
 /** Panel background themes, chosen in the panel's Settings or the echocode.panelBackground setting. */
 export const PANEL_BACKGROUNDS = ['midnight', 'graphite', 'purple', 'ocean', 'vscode'] as const;

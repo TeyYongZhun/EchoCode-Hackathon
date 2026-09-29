@@ -8,7 +8,6 @@ import {
 } from '../src/protocol';
 import { AudioPlayer } from './AudioPlayer';
 import { ROBOT_SVG } from './robot';
-import { currentSentence } from './subtitles';
 
 type Usage = Extract<ToWebview, { type: 'usage' }>;
 
@@ -20,24 +19,25 @@ const vscode = acquireVsCodeApi();
 const player = new AudioPlayer();
 
 const STATUS: Record<SessionState, string> = {
+  asleep: 'Asleep',
   idle: 'Ready',
-  connecting: 'Connecting',
+  connecting: 'Waking up',
   listening: 'Listening',
   thinking: 'Thinking',
   speaking: 'Speaking',
 };
 /** What the bubble says after Stop, by what EchoCode was doing when it was pressed. */
 const STOPPED: Record<SessionState, string> = {
+  // Stop does nothing while asleep, so this is never shown.
+  asleep: 'Stopped.',
   idle: 'Stopped.',
   connecting: 'Stopped listening. Your question was cancelled.',
   listening: 'Stopped listening. Your question was cancelled.',
   thinking: 'Stopped. The answer was cancelled.',
   speaking: 'Stopped the answer.',
 };
-/** How long the last subtitle stays after an answer before the hint returns. */
-const SUBTITLE_LINGER_MS = 5000;
-/** Show each subtitle a moment before its words are heard. */
-const SUBTITLE_LEAD_MS = 200;
+/** How long a one-off message (what Stop did) stays before the hint returns. */
+const MESSAGE_LINGER_MS = 5000;
 /** Voice minutes an average question uses, for the "about N questions left" estimate. */
 const MINUTES_PER_QUESTION = 0.75;
 
@@ -51,7 +51,7 @@ const BACKGROUND_LABELS: Record<PanelBackground, string> = {
 
 const app = document.getElementById('app')!;
 app.className = 'app';
-app.dataset.state = 'idle';
+app.dataset.state = 'asleep';
 app.innerHTML = `
   <section class="log" aria-label="Conversation history">
     <ol class="entries"></ol>
@@ -99,8 +99,8 @@ app.innerHTML = `
       <span class="ring"></span>${ROBOT_SVG}
     </div>
     <div class="bubble" aria-live="polite">
-      <p class="line"><span class="speaker"></span><span class="words"></span></p>
-      <p class="meta"><span class="status">Ready</span><span class="latency"></span><span class="code-note"></span><span class="quota"></span></p>
+      <p class="line"><span class="words"></span></p>
+      <p class="meta"><span class="status">Asleep</span><span class="latency"></span><span class="code-note"></span><span class="quota"></span></p>
     </div>
     <div class="controls">
       <button class="open-settings" aria-expanded="false" title="Settings" aria-label="Settings">⚙</button>
@@ -114,7 +114,6 @@ const entries = $<HTMLOListElement>('.entries');
 const log = $('.log');
 const toLatest = $<HTMLButtonElement>('.to-latest');
 const bubble = $('.bubble');
-const speakerEl = $('.speaker');
 const wordsEl = $('.words');
 const statusEl = $('.status');
 const latencyEl = $('.latency');
@@ -132,13 +131,11 @@ const hotkeyHelpEl = $('.hotkey-help');
 const swatches = [...app.querySelectorAll<HTMLButtonElement>('.swatch')];
 const notice = $('.notice');
 
-let state: SessionState = 'idle';
+let state: SessionState = 'asleep';
 let hotkey = 'Ctrl+Alt+Space';
 let latestTurn = 0;
 let micLevel = 0;
 let shownLevel = 0;
-let subtitleVersion = 0;
-let shownSubtitle = 0;
 let lingerTimer: number | undefined;
 let showingError = false;
 /** The latest usage for the Settings view; undefined until the backend has answered. */
@@ -146,30 +143,15 @@ let usage: Usage | 'off' | 'error' | undefined;
 
 // ---- Bubble ---------------------------------------------------------------
 
-function setBubble(words: string, speaker: 'You' | 'EchoCode' | '' = '', kind: 'hint' | 'error' | 'speech' = 'speech'): void {
-  speakerEl.textContent = speaker ? `${speaker}  ` : '';
+function setBubble(words: string, kind: 'hint' | 'error' = 'hint'): void {
   wordsEl.textContent = words;
   bubble.dataset.kind = kind;
   showingError = kind === 'error';
 }
 
 function showHint(): void {
-  setBubble(`Hold ${hotkey} and ask about your code.`, '', 'hint');
-}
-
-/** Shows the answer's subtitle once the audio before it has played. */
-function scheduleSubtitle(turnId: number, text: string): void {
-  const version = ++subtitleVersion;
-  const delay = Math.max(0, player.queuedMs() - SUBTITLE_LEAD_MS);
-  window.setTimeout(() => {
-    if (version <= shownSubtitle || turnId !== latestTurn) return;
-    shownSubtitle = version;
-    setBubble(currentSentence(text), 'EchoCode');
-  }, delay);
-}
-
-function cancelSubtitles(): void {
-  shownSubtitle = ++subtitleVersion;
+  if (state === 'asleep') setBubble(`Press ${hotkey} to wake EchoCode.`, 'hint');
+  else setBubble(`Hold ${hotkey} and ask about your code.`, 'hint');
 }
 
 // ---- Settings -------------------------------------------------------------
@@ -238,7 +220,7 @@ function applyHotkey(label: string, custom: boolean): void {
   hotkey = custom ? 'your EchoCode hotkey' : label;
   hotkeyNameEl.textContent = custom ? 'Custom' : label;
   hotkeyHelpEl.textContent = `${custom ? `Default: ${label}. ` : ''}Hold it and ask, let go to send. Or tap it to start and tap again to send.`;
-  if (state === 'idle' && !showingError) showHint();
+  if ((state === 'idle' || state === 'asleep') && !showingError) showHint();
 }
 
 function applyBackground(background: PanelBackground): void {
@@ -371,30 +353,37 @@ function flash(button: HTMLButtonElement, label: string): void {
 // ---- Messages from the extension ------------------------------------------
 
 function onState(next: SessionState): void {
+  const wasAsleep = state === 'asleep';
   state = next;
   app.dataset.state = next;
   statusEl.textContent = STATUS[next];
   window.clearTimeout(lingerTimer);
   switch (next) {
+    case 'asleep':
+      showHint();
+      break;
     case 'connecting':
       showLatest();
-      setBubble('Connecting… keep talking.', '', 'hint');
+      // Waking up has nothing to say yet; a question asked while connecting does.
+      setBubble(wasAsleep ? 'Waking up…' : 'Connecting… keep talking.', 'hint');
       break;
     case 'listening':
       // A new question: back to the latest message, even if the user had scrolled up.
       showLatest();
       latencyEl.textContent = '';
       codeNoteEl.textContent = '';
-      cancelSubtitles();
-      setBubble(`Listening… let go of ${hotkey} to send.`, '', 'hint');
+      setBubble(`Listening… let go of ${hotkey} to send.`, 'hint');
       break;
     case 'thinking':
-      setBubble('Thinking…', '', 'hint');
+      setBubble('Thinking…', 'hint');
       break;
     case 'speaking':
+      // The answer itself is in the conversation above; here, say how to cut it short.
+      setBubble(`Speaking… press ${hotkey} to interrupt.`, 'hint');
       break;
     case 'idle':
-      if (!showingError) lingerTimer = window.setTimeout(showHint, SUBTITLE_LINGER_MS);
+      // Nothing lingers now that the bubble holds no words, so the hint comes straight back.
+      if (!showingError) showHint();
       break;
   }
 }
@@ -403,17 +392,16 @@ function onMessage(message: ToWebview): void {
   switch (message.type) {
     case 'hello':
       hotkey = message.hotkey;
-      if (state === 'idle' && !showingError) showHint();
+      if ((state === 'idle' || state === 'asleep') && !showingError) showHint();
       break;
     case 'state':
       onState(message.state);
       break;
     case 'stopped':
       // Say what Stop did, then go back to the usual hint.
-      cancelSubtitles();
       window.clearTimeout(lingerTimer);
-      setBubble(STOPPED[message.was], '', 'hint');
-      lingerTimer = window.setTimeout(showHint, SUBTITLE_LINGER_MS);
+      setBubble(STOPPED[message.was], 'hint');
+      lingerTimer = window.setTimeout(showHint, MESSAGE_LINGER_MS);
       break;
     case 'micLevel':
       micLevel = message.level;
@@ -424,18 +412,14 @@ function onMessage(message: ToWebview): void {
       break;
     case 'flushAudio':
       player.flush();
-      cancelSubtitles();
       break;
     case 'userTranscript':
       latestTurn = Math.max(latestTurn, message.turnId);
       setEntryText(message.turnId, 'user', message.text);
-      if (state === 'listening' || state === 'thinking') setBubble(currentSentence(message.text), 'You');
       break;
     case 'modelTranscript':
       latestTurn = Math.max(latestTurn, message.turnId);
       setEntryText(message.turnId, 'model', message.text);
-      // Empty when a reply was cut short and a new one is coming.
-      if (message.text.trim()) scheduleSubtitle(message.turnId, message.text);
       break;
     case 'latency': {
       latencyEl.textContent = `⚡ ${message.ms} ms`;
@@ -486,7 +470,7 @@ function onMessage(message: ToWebview): void {
     case 'error':
       // Errors stay up until the next conversation instead of fading into the hint.
       window.clearTimeout(lingerTimer);
-      setBubble(message.message, '', 'error');
+      setBubble(message.message, 'error');
       break;
   }
 }

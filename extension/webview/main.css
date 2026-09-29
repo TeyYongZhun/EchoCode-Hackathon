@@ -88,6 +88,31 @@ button {
   --accent: var(--cyan);
 }
 
+/* Before the first hotkey press: dimmed, still, eyes shut. */
+.app[data-state='asleep'] {
+  --accent: var(--muted);
+}
+
+.app[data-state='asleep'] .ring {
+  opacity: 0.2;
+  animation: none;
+}
+
+.app[data-state='asleep'] .robot-svg {
+  filter: none;
+  opacity: 0.6;
+}
+
+.app[data-state='asleep'] .robot-svg .eyes {
+  transform: scaleY(0.12);
+  animation: none;
+}
+
+.app[data-state='asleep'] .bubble,
+.app[data-state='asleep'] .bubble::before {
+  border-color: var(--line);
+}
+
 .app[data-state='thinking'] {
   --accent: var(--amber);
 }
@@ -96,7 +121,7 @@ button {
   --accent: var(--magenta);
 }
 
-/* ---- Stage: robot, subtitle bubble, controls ---- */
+/* ---- Stage: robot, status bubble, controls ---- */
 
 .stage {
   display: flex;
@@ -238,11 +263,6 @@ button {
 
 .bubble[data-kind='error'] .words {
   color: var(--danger);
-}
-
-.speaker {
-  color: var(--accent);
-  font-weight: 600;
 }
 
 .bubble .meta {

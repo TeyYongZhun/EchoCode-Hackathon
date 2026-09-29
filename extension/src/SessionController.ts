@@ -6,6 +6,7 @@ import { readSettings } from './config';
 import { captureEditorContext, captureTarget, type EditorTracker, type QuestionTarget } from './context/editorContext';
 import { formatConversation, remember, type Exchange } from './context/conversation';
 import { findLineReferences } from './context/lineReferences';
+import { captureProject, languageOf, type WorkspaceIndex } from './context/workspaceIndex';
 import { AgentClient, ResumeFailedError } from './voice/AgentClient';
 import { fetchSuggestion } from './voice/suggestionClient';
 import { fetchSessionTicket } from './voice/tokenProvider';
@@ -48,6 +49,14 @@ const PLAYBACK_START_DELAY_MS = 50;
 /** Give up on a question if its answer hasn't started this long after it was sent. */
 const REPLY_TIMEOUT_MS = 20_000;
 const NO_REPLY = "EchoCode didn't answer that time. Please ask again.";
+/** Give up on the wake-up greeting after this; it normally starts within half a second. */
+const GREETING_TIMEOUT_MS = 6000;
+/**
+ * Most the editor and project context may take together. Measured against the
+ * live Voice Agent: a session.update much over 64 KB is rejected outright, so
+ * this leaves room for the system prompt and the conversation carried with it.
+ */
+const CONTEXT_BUDGET_CHARS = 45_000;
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -57,16 +66,25 @@ function errorMessage(err: unknown): string {
  * Runs push-to-talk turns: hotkey → capture editor context and mic audio →
  * AssemblyAI Voice Agent → spoken answer in the panel.
  *
+ *   asleep ─talk─► connecting ─► thinking ─► speaking (greeting) ─► idle
+ *
  *   idle ─talk─► connecting ─► listening ─talk/silence─► thinking ─audio─► speaking ─done─► idle
  *                                  ▲                                          │
  *                                  └───────────── talk (barge in) ────────────┘
+ *
+ * Nothing connects until the first hotkey press: AssemblyAI bills for the time
+ * a session is open. That first press wakes EchoCode, and the greeting covers
+ * the couple of seconds the session takes to open, so the first real question
+ * starts listening straight away.
  *
  * The agent only hears a question once the user actually speaks: a turn with
  * no speech is cancelled locally rather than sending silence, which voice
  * models tend to answer with nonsense.
  */
 export class SessionController implements vscode.Disposable {
-  private state: SessionState = 'idle';
+  private state: SessionState = 'asleep';
+  /** The reply now arriving is the wake-up greeting, not an answer to a question. */
+  private greeting = false;
   private readonly live: AgentClient;
   private readonly mic = new MicRecorder();
   private readonly presses = new HotkeyPresses();
@@ -124,16 +142,24 @@ export class SessionController implements vscode.Disposable {
   private readonly editors: EditorTracker;
   private readonly log: vscode.LogOutputChannel;
   private readonly installId: string;
+  private readonly index: WorkspaceIndex;
   private readonly subscription: vscode.Disposable;
   private readonly stateChanged = new vscode.EventEmitter<SessionState>();
 
   readonly onDidChangeState = this.stateChanged.event;
 
-  constructor(view: AssistantViewProvider, editors: EditorTracker, log: vscode.LogOutputChannel, installId: string) {
+  constructor(
+    view: AssistantViewProvider,
+    editors: EditorTracker,
+    log: vscode.LogOutputChannel,
+    installId: string,
+    index: WorkspaceIndex,
+  ) {
     this.view = view;
     this.editors = editors;
     this.log = log;
     this.installId = installId;
+    this.index = index;
     this.cards = new CodeCards(editors);
     this.live = new AgentClient(
       {
@@ -189,6 +215,7 @@ export class SessionController implements vscode.Disposable {
 
   /** Cancels whatever is happening and goes quiet. */
   async stop(): Promise<void> {
+    if (this.state === 'asleep') return;
     const hadActivity = this.activityOpen;
     const was = this.state;
     if (was === 'thinking' || was === 'speaking') this.rememberTurn(true);
@@ -219,9 +246,14 @@ export class SessionController implements vscode.Disposable {
 
   private async handleTalk(): Promise<void> {
     switch (this.state) {
+      case 'asleep':
+        return this.wake();
       case 'idle':
         return this.startTurn();
       case 'connecting':
+        // Pressed again during the greeting: they want to ask now, so drop it and listen.
+        if (this.greeting) return this.bargeIn();
+        return this.sessionReady ? this.finishSpeaking() : this.requestFinish();
       case 'listening':
         return this.sessionReady ? this.finishSpeaking() : this.requestFinish();
       case 'thinking':
@@ -255,16 +287,60 @@ export class SessionController implements vscode.Disposable {
     }
   }
 
-  private async startTurn(): Promise<void> {
-    const settings = readSettings();
-    const editor = this.editors.editor;
+  /**
+   * The first hotkey press. Opens the session and lets the agent say hello;
+   * the microphone stays off, so the greeting can't be mistaken for a question.
+   */
+  private async wake(): Promise<void> {
     const turn = ++this.turnId;
     this.lastActivityAt = Date.now();
     this.voiceSeconds = 0;
     this.replyPlaysAt = 0;
     this.wordTimes = [];
+    this.userText = '';
+    this.modelText = '';
+    this.sawAudio = false;
+    this.playbackEndsAt = 0;
+    // Set before connecting: the greeting can start arriving the moment the session is ready.
+    this.greeting = true;
+    this.setState('connecting');
+    void this.view.ensureVisible(this.editors.editor);
+
+    try {
+      await this.ensureSession(true);
+    } catch (err) {
+      if (turn === this.turnId) {
+        this.greeting = false;
+        this.fail(errorMessage(err));
+      }
+      return;
+    }
+    if (turn !== this.turnId) return;
+
+    // Stay on "Waking up…" until the greeting actually speaks; the first audio moves us on.
+    clearTimeout(this.replyTimer);
+    this.replyTimer = setTimeout(() => {
+      if (turn !== this.turnId || !this.greeting) return;
+      // No greeting is no loss: the session is open, so a question can be asked straight away.
+      this.greeting = false;
+      this.log.warn('No greeting arrived; EchoCode is ready anyway');
+      this.setState('idle');
+    }, GREETING_TIMEOUT_MS);
+  }
+
+  private async startTurn(): Promise<void> {
+    const settings = readSettings();
+    const editor = this.editors.editor;
+    const turn = ++this.turnId;
+    this.lastActivityAt = Date.now();
+    this.greeting = false;
+    this.voiceSeconds = 0;
+    this.replyPlaysAt = 0;
+    this.wordTimes = [];
     clearTimeout(this.idleCloseTimer);
-    this.turnContext = captureEditorContext(editor, settings.maxContextLines);
+    const editorContext = captureEditorContext(editor, settings.maxContextLines);
+    const project = captureProject(this.index, editor, CONTEXT_BUDGET_CHARS - editorContext.length);
+    this.turnContext = project ? `${editorContext}\n\n${project}` : editorContext;
     this.turnTarget = captureTarget(editor);
     this.clearHighlights();
     this.userText = '';
@@ -322,30 +398,30 @@ export class SessionController implements vscode.Disposable {
   }
 
   /** Opens a voice session unless one is open or opening. Concurrent callers share one attempt. */
-  private ensureSession(): Promise<void> {
+  private ensureSession(greet = false): Promise<void> {
     if (this.live.isOpen) return Promise.resolve();
-    this.connecting ??= this.openSession().finally(() => {
+    this.connecting ??= this.openSession(greet).finally(() => {
       this.connecting = undefined;
     });
     return this.connecting;
   }
 
   /** Connects, resuming a recently dropped session (and its conversation) when possible. */
-  private async openSession(): Promise<void> {
+  private async openSession(greet: boolean): Promise<void> {
     const backendUrl = readSettings().backendUrl;
     const resuming = this.live.canResume;
     let resumed = resuming;
     const started = Date.now();
     let ticket = await fetchSessionTicket(backendUrl, this.installId);
     try {
-      await this.live.connect(ticket);
+      await this.live.connect(ticket, greet);
     } catch (err) {
       if (!(err instanceof ResumeFailedError)) throw err;
       // The session expired; carry on with a fresh conversation rather than failing.
       this.log.warn(`Couldn't resume the previous conversation (${err.message}). Starting a new one.`);
       resumed = false;
       ticket = await fetchSessionTicket(backendUrl, this.installId);
-      await this.live.connect(ticket);
+      await this.live.connect(ticket, greet);
     }
     // A fresh session knows nothing of the conversation so far; tell it.
     if (!resumed) this.carriedConversation = formatConversation(this.conversation);
@@ -482,15 +558,29 @@ export class SessionController implements vscode.Disposable {
     }
   }
 
+  /**
+   * A reply belongs to what's happening now: an answer being thought out or
+   * spoken, or the wake-up greeting, which arrives while we're still showing
+   * "Waking up…" rather than making the user watch a "Thinking…" they never asked for.
+   */
+  private get receivingReply(): boolean {
+    return this.state === 'thinking' || this.state === 'speaking' || (this.greeting && this.state === 'connecting');
+  }
+
   private onAudio(data: string): void {
-    if (this.state !== 'thinking' && this.state !== 'speaking') return;
+    if (!this.receivingReply) return;
     if (!this.sawAudio) {
       this.sawAudio = true;
       this.replyPlaysAt ||= Date.now() + PLAYBACK_START_DELAY_MS;
-      const ms = Date.now() - this.endOfSpeechAt;
-      this.log.info(`Turn ${this.turnId}: first audio after ${ms} ms`);
-      this.view.post({ type: 'latency', turnId: this.turnId, ms });
       clearTimeout(this.replyTimer);
+      if (this.greeting) {
+        // No question was asked, so there's no answering time to report.
+        this.log.info('Greeting started');
+      } else {
+        const ms = Date.now() - this.endOfSpeechAt;
+        this.log.info(`Turn ${this.turnId}: first audio after ${ms} ms`);
+        this.view.post({ type: 'latency', turnId: this.turnId, ms });
+      }
       this.setState('speaking');
     }
     this.view.post({ type: 'audio', data });
@@ -507,7 +597,7 @@ export class SessionController implements vscode.Disposable {
   }
 
   private onOutputTranscript(text: string, startMs: number | null): void {
-    if (this.state !== 'thinking' && this.state !== 'speaking') return;
+    if (!this.receivingReply) return;
     this.modelText += text;
     if (startMs !== null) this.wordTimes.push({ end: this.modelText.length, startMs });
     this.view.post({ type: 'modelTranscript', turnId: this.turnId, text: this.modelText });
@@ -522,7 +612,7 @@ export class SessionController implements vscode.Disposable {
   private onInterrupted(): void {
     this.view.post({ type: 'flushAudio' });
     this.playbackEndsAt = 0;
-    if (this.state !== 'thinking' && this.state !== 'speaking') return;
+    if (!this.receivingReply) return;
     this.log.info(`Turn ${this.turnId}: reply cut short; waiting for the answer to the whole question`);
     clearTimeout(this.idleTimer);
     if (this.modelText) this.view.post({ type: 'modelTranscript', turnId: this.turnId, text: '' });
@@ -544,19 +634,21 @@ export class SessionController implements vscode.Disposable {
    * of the text may still be growing ("twenty" → "twenty-one").
    */
   private scheduleHighlights(final: boolean): void {
-    const document = this.turnTarget?.document;
-    if (!document) return;
+    const openUri = this.turnTarget?.document.uri;
     const text = this.modelText;
     const settledLength = text.trimEnd().length;
-    const refs = findLineReferences(text).filter((ref) => final || ref.endOffset < settledLength);
+    const refs = findLineReferences(text, this.index.knownPaths()).filter((ref) => final || ref.endOffset < settledLength);
     const turn = this.turnId;
     for (const ref of refs.slice(this.highlightedRefs)) {
+      // A named project file wins over the open one: that's the file being talked about.
+      const uri = ref.file ? this.index.uriFor(ref.file) : openUri;
+      if (!uri) continue;
       const word = this.wordTimes.find((w) => w.end >= ref.endOffset);
       const playsAt = word && this.replyPlaysAt ? this.replyPlaysAt + word.startMs : this.playbackEndsAt;
       const delay = Math.max(0, playsAt - Date.now() - HIGHLIGHT_LEAD_MS);
       this.highlightTimers.push(
         setTimeout(() => {
-          if (turn === this.turnId) this.highlighter.show(document, ref.start, ref.end);
+          if (turn === this.turnId) void this.highlighter.show(uri, ref.start, ref.end);
         }, delay),
       );
     }
@@ -571,23 +663,40 @@ export class SessionController implements vscode.Disposable {
   }
 
   /** Asks the backend for the code behind the answer, and shows it as a card. */
+  /**
+   * The project file an answer was about, when it was about exactly one other
+   * file. Anything less certain keeps the card pointed at the open file:
+   * inserting code into the wrong file is the one mistake worth avoiding here.
+   */
+  private fileTheAnswerWasAbout(answer: string, target: QuestionTarget): vscode.Uri | undefined {
+    const named = new Set(
+      findLineReferences(answer, this.index.knownPaths())
+        .map((ref) => ref.file)
+        .filter((file): file is string => file !== undefined),
+    );
+    if (named.size !== 1) return undefined;
+    const uri = this.index.uriFor([...named][0]);
+    return uri && uri.toString() !== target.document.uri.toString() ? uri : undefined;
+  }
+
   private async requestCodeCard(turn: number): Promise<void> {
     const answer = this.modelText.trim();
     const target = this.turnTarget;
     if (answer.length < MIN_ANSWER_FOR_CODE || !target) return;
     this.view.post({ type: 'codePending', turnId: turn });
     const started = Date.now();
+    const inFile = this.fileTheAnswerWasAbout(answer, target);
     try {
       const suggestion = await fetchSuggestion(readSettings().backendUrl, {
         installId: this.installId,
         context: this.turnContext,
         question: this.userText.trim(),
         answer,
-        languageId: target.document.languageId,
+        languageId: inFile ? languageOf(inFile) : target.document.languageId,
         selectedCode: target.selection?.text,
       });
       this.log.info(`Turn ${turn}: code card ${suggestion ? `"${suggestion.title}"` : 'not needed'} (${Date.now() - started} ms)`);
-      if (suggestion) this.view.post({ type: 'codeSuggestion', card: this.cards.add(turn, suggestion, target) });
+      if (suggestion) this.view.post({ type: 'codeSuggestion', card: this.cards.add(turn, suggestion, target, inFile) });
       else this.view.post({ type: 'codeNone', turnId: turn });
     } catch (err) {
       this.log.warn(`Turn ${turn}: couldn't get a code card: ${errorMessage(err)}`);
@@ -607,15 +716,28 @@ export class SessionController implements vscode.Disposable {
   }
 
   private onTurnComplete(): void {
-    if (this.state !== 'thinking' && this.state !== 'speaking') return;
+    if (!this.receivingReply) return;
     const turn = this.turnId;
     this.lastActivityAt = Date.now();
     if (!this.sawAudio && !this.modelText.trim()) {
-      // Still nothing after asking again: say so rather than go quietly back to Ready.
-      this.log.warn(`Turn ${turn}: the voice agent's answer was empty`);
       clearTimeout(this.replyTimer);
       this.setState('idle');
+      // A silent greeting is no loss; a silent answer means the question went unanswered.
+      if (this.greeting) {
+        this.greeting = false;
+        this.log.warn('The wake-up greeting was silent');
+        return;
+      }
+      this.log.warn(`Turn ${turn}: the voice agent's answer was empty`);
       this.view.post({ type: 'error', message: NO_REPLY });
+      return;
+    }
+    if (this.greeting) {
+      // A greeting answers no question: no code card, and nothing to remember.
+      this.greeting = false;
+      this.log.info(`Greeting finished: "${this.modelText.trim()}"`);
+      void this.reportTurnUsage(this.voiceSeconds);
+      this.idleAfterPlayback(turn);
       return;
     }
     this.view.post({ type: 'turnComplete', turnId: turn });
@@ -624,7 +746,11 @@ export class SessionController implements vscode.Disposable {
     this.scheduleHighlights(true);
     void this.requestCodeCard(turn);
     void this.reportTurnUsage(this.voiceSeconds);
-    // Reply audio arrives faster than real time, so wait for playback to finish.
+    this.idleAfterPlayback(turn);
+  }
+
+  /** Back to idle once the reply has actually been heard; its audio arrives faster than real time. */
+  private idleAfterPlayback(turn: number): void {
     const wait = Math.max(0, this.playbackEndsAt - Date.now()) + PLAYBACK_TAIL_MS;
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
@@ -651,6 +777,7 @@ export class SessionController implements vscode.Disposable {
   private fail(message: string): void {
     this.log.error(message);
     this.turnId++;
+    this.greeting = false;
     this.clearTimers();
     this.sessionReady = false;
     this.activityOpen = false;

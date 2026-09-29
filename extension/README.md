@@ -1,19 +1,24 @@
 # EchoCode
 
-**The voice-first AI pair programmer.** Highlight code, hold a key and ask out loud. EchoCode reads the file you're looking at and talks you through it, highlighting the lines it mentions and handing you ready-to-insert code when it suggests a fix.
+**The voice-first AI pair programmer.** Hold a key and ask out loud. EchoCode reads the file you are looking at and the rest of your project, talks you through it, opens the file it is talking about and lights up the lines, and hands you ready-to-insert code when it suggests a fix.
 
 Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gateway for code cards.
 
 ## How to use it
 
-1. Select the code you're curious about.
-2. **Hold `Ctrl+Alt+Space`** (`Ctrl+Shift+Space` on macOS), ask your question and let go. You can also tap the key or click **EchoCode** in the status bar, speak, and tap again.
-3. Listen. The answer plays in the **EchoCode** tab of the right panel, with live subtitles, and the lines it mentions light up in your editor.
+1. Press **`Ctrl+Alt+Space`** (`Ctrl+Shift+Space` on macOS) once to wake EchoCode. It says hello and stays ready.
+2. **Hold the same key**, ask your question and let go. You can also tap the key or click **EchoCode** in the status bar, speak, and tap again. Select some code first if your question is about a particular part.
+3. Listen. The answer appears in the conversation in the **EchoCode** tab of the right panel, and the lines it mentions light up in your editor. If the answer is in another file, that file opens.
 4. When it proposes a change, use **Replace lines** or **Insert at Cursor** on the code card in the conversation.
 
 Press the key while EchoCode is talking to interrupt it with a new question.
 
 Click **⚙** in the panel to see your plan and minutes left this month, upgrade to Pro, change the hotkey (it opens Keyboard Shortcuts at **EchoCode: Talk**), or change the panel background.
+
+## What EchoCode can answer
+
+- **About the code in front of you:** "why does this crash?", "walk me through this method".
+- **About the rest of the project:** "where do I change the font?", "how does clicking a task mark it done?" EchoCode reads the other source files in the open folder, so it can point at a file you do not have open.
 
 ## Commands
 
@@ -30,16 +35,16 @@ Click **⚙** in the panel to see your plan and minutes left this month, upgrade
 |---|---|---|
 | `echocode.backendUrl` | `https://echo-code-hackathon.vercel.app` | The EchoCode backend that issues session tokens |
 | `echocode.micDeviceIndex` | `-1` | Microphone to use; `-1` is the system default |
-| `echocode.maxContextLines` | `400` | Lines of the current file sent with each question |
+| `echocode.maxContextLines` | `400` | Lines of the open file sent with each question. The other project files go alongside it, within a 45 KB budget |
 | `echocode.autoStopSilenceMs` | `2000` | Send automatically after this much silence; `0` turns it off |
 | `echocode.panelBackground` | `midnight` | Panel background: `midnight`, `graphite`, `purple`, `ocean` or `vscode` (follow your theme) |
 
 ## Privacy
 
-Nothing is recorded until you press the hotkey. Your question audio and the surrounding code go to AssemblyAI to be answered. No API key is stored in the extension: the backend hands out short-lived, single-use session tokens.
+Nothing is recorded until you press the hotkey. Your question audio goes to AssemblyAI to be answered, along with the file you're looking at and the other source files in the open folder, so EchoCode can answer about code you don't have open. Folders like `node_modules`, `.git` and build output are never sent. No API key is stored in the extension: the backend hands out short-lived, single-use session tokens.
 
 ## Free and Pro
 
 Free includes 15 minutes of voice a month, about 20 questions. Pro ($15/month, or $144/year) includes 150 minutes, about 200 questions. The panel's ⚙ Settings shows how many minutes are left.
 
-Source and full documentation: https://github.com/TeyYongZhun/EchoCode_Hackathon
+Source and full documentation: https://github.com/TeyYongZhun/EchoCode-Hackathon
