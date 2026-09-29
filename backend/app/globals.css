@@ -613,13 +613,13 @@ h2 {
 
 .pricing {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-  gap: 22px;
-  max-width: 880px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 18px;
+  max-width: 1160px;
 }
 
 .plan {
-  padding: 30px;
+  padding: 26px 22px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--surface);
@@ -677,6 +677,7 @@ h2 {
 }
 
 .plan-tagline {
+  min-height: 2.9em;
   margin: 2px 0 18px;
   color: var(--muted);
 }
@@ -750,7 +751,7 @@ h2 {
 }
 
 .pricing-footnote {
-  max-width: 880px;
+  max-width: 1160px;
   margin: 22px 0 0;
   color: var(--muted);
   font-size: 14px;

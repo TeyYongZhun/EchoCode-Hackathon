@@ -57,21 +57,71 @@ const FEATURES = [
   },
 ];
 
-const FREE_FEATURES = [
-  '15 minutes of voice a month, about 20 questions*',
-  'Ask out loud and hear the answer',
-  'Answers that look across your project, not just the open file',
-  'Ask for any file by name and it opens',
-  'Lines light up as they are mentioned',
-  'A conversation you can scroll back through',
-  'One-click code cards',
-];
+interface Plan {
+  name: string;
+  tagline: string;
+  price: string;
+  note: string;
+  featured?: boolean;
+  featuresTitle?: string;
+  features: string[];
+}
 
-const PRO_FEATURES = [
-  '150 minutes of voice a month, about 200 questions*',
-  'Top up minutes whenever you need more',
-  'Planned: a stronger model behind code cards',
-  'Planned: more of your project sent with each question',
+const PLANS: Plan[] = [
+  {
+    name: 'Free',
+    tagline: 'Try EchoCode',
+    price: '$0',
+    note: 'Available now. No card, no API key.',
+    features: [
+      '10 minutes of voice a month, about 13 questions*',
+      'Ask out loud and hear the answer',
+      'Answers that look across your project, not just the open file',
+      'Ask for any file by name and it opens',
+      'Lines light up as they are mentioned',
+      'One-click code cards',
+    ],
+  },
+  {
+    name: 'Pro',
+    tagline: 'For everyday learning and coding',
+    price: '$20',
+    note: 'Per month, or $192 a year — two months free.',
+    featured: true,
+    featuresTitle: 'Everything in Free, plus:',
+    features: [
+      '60 questions a month, about 45 minutes of voice*',
+      'Top up whenever you need more',
+      'Follow-ups stay instant — the session is kept warm',
+      'Planned: a stronger model behind code cards',
+    ],
+  },
+  {
+    name: 'Cohort',
+    tagline: 'For bootcamps and training programmes',
+    price: '$25',
+    note: 'Per learner, once, for a 12-week cohort.',
+    featuresTitle: 'Everything in Pro, for every learner:',
+    features: [
+      'Minutes pooled across the whole cohort',
+      'No sign-up for learners — one invoice, everyone in',
+      'Planned: progress view of where a cohort gets stuck',
+      'Planned: overage by the minute, never a hard stop',
+    ],
+  },
+  {
+    name: 'Campus',
+    tagline: 'For university departments',
+    price: '$36',
+    note: 'Per seat, per academic year.',
+    featuresTitle: 'Everything in Pro, for every student:',
+    features: [
+      'Minutes pooled across the department',
+      'Priced per enrolled seat, billed once a year',
+      'Planned: instructor view of the concepts a class keeps missing',
+      'Planned: shared allowance across courses',
+    ],
+  },
 ];
 
 const ASSEMBLYAI = [
@@ -261,56 +311,43 @@ export default function Home() {
           <div className="wrap" data-reveal>
             <h2>Pricing</h2>
             <p className="section-lede">
-              Built first for computer science students and junior developers. VS Code has around 30 million users, and
-              we estimate 5 to 7 million of them are in that group.
+              Free forever for individuals. Bootcamps and universities pay for the students they teach, so nobody
+              learning to read code ever hits a paywall on their own.
             </p>
             <div className="pricing">
-              <div className="plan">
-                <Robot className="plan-icon" />
-                <h3>Free</h3>
-                <p className="plan-tagline">Try EchoCode</p>
-                <p className="plan-price">$0</p>
-                <p className="plan-note">Available now. No card, no API key.</p>
-                <a className="button plan-button" href={DOWNLOAD_URL}>
-                  Download the extension
-                </a>
-                <hr />
-                <ul className="plan-features">
-                  {FREE_FEATURES.map((feature) => (
-                    <li key={feature}>
-                      <Check />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="plan featured">
-                <Robot className="plan-icon" waves />
-                <div className="plan-name">
-                  <h3>Pro</h3>
-                  <span className="plan-badge">Save 20% yearly</span>
+              {PLANS.map((plan) => (
+                <div className={plan.featured ? 'plan featured' : 'plan'} key={plan.name}>
+                  <Robot className="plan-icon" waves={plan.featured} />
+                  <h3>{plan.name}</h3>
+                  <p className="plan-tagline">{plan.tagline}</p>
+                  <p className="plan-price">{plan.price}</p>
+                  <p className="plan-note">{plan.note}</p>
+                  {plan.name === 'Free' ? (
+                    <a className="button plan-button" href={DOWNLOAD_URL}>
+                      Download the extension
+                    </a>
+                  ) : (
+                    <span className="button secondary plan-button" aria-disabled="true">
+                      Coming soon
+                    </span>
+                  )}
+                  <hr />
+                  {plan.featuresTitle && <p className="plan-features-title">{plan.featuresTitle}</p>}
+                  <ul className="plan-features">
+                    {plan.features.map((feature) => (
+                      <li key={feature}>
+                        <Check />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <p className="plan-tagline">For everyday learning and coding</p>
-                <p className="plan-price">$12</p>
-                <p className="plan-note">Per month with annual billing ($144 up front). $15 if billed monthly.</p>
-                <span className="button secondary plan-button" aria-disabled="true">
-                  Coming soon
-                </span>
-                <hr />
-                <p className="plan-features-title">Everything in Free, plus:</p>
-                <ul className="plan-features">
-                  {PRO_FEATURES.map((feature) => (
-                    <li key={feature}>
-                      <Check />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              ))}
             </div>
             <p className="pricing-footnote">
-              *Minutes count while a voice session is open; question counts are estimates. Pro is not on sale yet, and
-              the items marked planned are not built. Shared minutes for teams and universities come after that.
+              *Minutes count while a voice session is open, not only while someone is speaking; question counts are
+              estimates. Only Free is available today. Pro, Cohort and Campus are not on sale yet, and the items marked
+              planned are not built.
             </p>
           </div>
         </section>
