@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { HeroDemo } from './HeroDemo';
+import { HeroVideo } from './HeroVideo';
 import { Check, Robot } from './Robot';
 import { ScrollReveals } from './ScrollReveals';
 
@@ -66,6 +67,15 @@ interface Plan {
   featuresTitle?: string;
   features: string[];
 }
+
+/**
+ * The demo video shown in the hero. Paste a YouTube link (or its id), or drop an
+ * .mp4 into `public/` and use its path, such as '/demo.mp4'. While this is empty
+ * the animated code mock is shown instead.
+ */
+const DEMO_VIDEO: string = '';
+/** Still frame shown before an .mp4 plays. Ignored for YouTube. */
+const DEMO_POSTER = '/demo-poster.png';
 
 const PLANS: Plan[] = [
   {
@@ -217,7 +227,7 @@ export default function Home() {
               </p>
             </div>
 
-            <HeroDemo />
+            {DEMO_VIDEO ? <HeroVideo src={DEMO_VIDEO} poster={DEMO_POSTER} /> : <HeroDemo />}
           </div>
         </header>
 
