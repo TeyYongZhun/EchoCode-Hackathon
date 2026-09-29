@@ -48,8 +48,10 @@ Click **⚙** in the panel to see your plan and minutes left this month, upgrade
 
 Nothing is recorded until you press the hotkey. Your question audio goes to AssemblyAI to be answered, along with the file you're looking at and the other source files in the open folder, so EchoCode can answer about code you don't have open. Folders like `node_modules`, `.git` and build output are never sent. No API key is stored in the extension: the backend hands out short-lived, single-use session tokens.
 
-## Free and Pro
+## Plans
 
-Free includes 15 minutes of voice a month, about 20 questions. Pro ($15/month, or $144/year) includes 150 minutes, about 200 questions. The panel's ⚙ Settings shows how many minutes are left.
+Free includes 10 minutes of voice a month, about 13 questions, and is available today. Pro ($20/month, or $192/year) adds 60 questions a month. Cohort ($25 per learner, once, for a 12-week cohort) and Campus ($36 per seat, per academic year) pool minutes across a bootcamp intake or a university department. Pro, Cohort and Campus are not on sale yet.
+
+Minutes count while a voice session is open, not only while you are speaking. The panel's ⚙ Settings shows how many are left.
 
 Source and full documentation: https://github.com/TeyYongZhun/EchoCode-Hackathon

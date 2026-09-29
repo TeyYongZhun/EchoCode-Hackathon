@@ -74,17 +74,24 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 ## Business model
 
-- **Who it's for first:** CS undergraduates and junior developers. They often struggle with data structures such as linked lists, stacks and generics, and learn best through back-and-forth conversation.
-- **Market:** VS Code has about 30 million users. Our first target is the estimated 5 to 7 million students and entry-level developers among them.
-- **Pricing:**
+**We sell to institutions, not to students.** Individuals use EchoCode free; the invoice goes to the bootcamp or department whose measured outcome improves. Students are the way in, not the customer.
 
-| Plan | Price | Voice minutes | Includes |
+- **The user:** a second-year undergraduate at 11pm with an AI chat open in another window, who has already pasted in code they cannot explain.
+- **The buyer:** the programme director or course lead who is failing to teach them. Bootcamps decide in weeks and are scored on completion rate, so they come first; university departments are the larger contract and are sold into course by course.
+- **Who it's really for:** people who have to read code they didn't write. AI codegen is growing that group far faster than any enrolment figure is shrinking it.
+
+| Plan | Price | Included | Status |
 |---|---|---|---|
-| Free | $0 | 15 a month, about 20 questions | Spoken answers, project-wide questions, line highlights, one-click code cards — all shipping today |
-| Pro (not on sale yet) | $15/month, or $144/year | 150 a month, about 200 questions | Everything in Free, plus minute top-ups. Planned, not yet built: a stronger model behind code cards and more project context per question |
+| **Free** | $0 | 10 minutes of voice a month, about 13 questions | **Available today** |
+| **Pro** | $20/month, or $192/year | 60 questions a month, about 45 minutes of voice | Not on sale yet |
+| **Cohort** | $25 per learner, once, for a 12-week cohort | Everything in Pro for every learner, minutes pooled across the cohort | Not on sale yet |
+| **Campus** | $36 per seat, per academic year | Everything in Pro for every student, minutes pooled across the department | Not on sale yet |
 
-- **Teams and universities (coming next):** shared minutes for companies, and a campus plan with an instructor view showing which concepts students struggle with.
-- **Unit economics:** the Voice Agent API costs $0.075 a minute, so a free user costs at most $1.13 a month and a Pro user at most $11.25, less than they pay. The average student in published classroom studies asks 8 to 20 AI questions a month, which fits inside Free. Question counts assume about 0.75 minutes of session time per question.
+- **Unit economics:** the Voice Agent API bills **per second of session duration** at $0.075 a minute — not per minute of speech. A question is 45 seconds of talking but holds the session open for about 3 minutes, so it costs roughly **$0.22**, falling to about **$0.09** at a 30-second idle timeout. Code cards add $0.0014 each through the LLM Gateway, which is under 0.2% of cost of goods sold.
+- **Margins:** 83% on a cohort deal, 65% on a campus deal. Voice is a genuine cost of goods, so this is a 60–83% business rather than the 90% of pure software, and allowances are capped in code.
+- **Cost roadmap:** idle session time is the cost driver, not question volume. Tiering the idle timeout by plan — short on Free, 3 minutes on Pro — cuts unit cost by up to 58% and turns responsiveness into part of what a paid plan buys.
+
+The full model, deal-level P&L and three-year projection are in [docs/EchoCode-Revenue-Plan.pdf](docs/EchoCode-Revenue-Plan.pdf). Prices are modelled hypotheses; the cost base is verified against live AssemblyAI pricing.
 
 ## Try it
 
@@ -150,7 +157,7 @@ EchoCode-Hackathon/
 | VS Code extension | GitHub Releases | Build with `npm run package` in `extension/` and attach the `.vsix` to a release |
 | Backend and landing page | Vercel | Root Directory `backend`, Framework Preset Next.js, add the `ASSEMBLYAI_API_KEY` env variable |
 | Voice and code suggestions | AssemblyAI | Voice Agent API and LLM Gateway; the API key lives only on the backend |
-| Usage database | Upstash Redis (Vercel Marketplace) | Optional; turns on the monthly voice minutes (15 on Free, 150 on Pro) |
+| Usage database | Upstash Redis (Vercel Marketplace) | Optional; turns on the monthly voice allowance (10 minutes on Free) |
 
 Live backend and landing page: https://echo-code-hackathon.vercel.app
 

@@ -11,9 +11,9 @@
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 
-/** Voice allowance per month: 15 minutes (about 20 questions) on Free, 150 (about 200) on Pro. */
-export const FREE_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_FREE_SECONDS_PER_MONTH ?? 15 * 60);
-export const PRO_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_PRO_SECONDS_PER_MONTH ?? 150 * 60);
+/** Voice allowance per month: 10 minutes (about 13 questions) on Free, 45 (about 60) on Pro. */
+export const FREE_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_FREE_SECONDS_PER_MONTH ?? 10 * 60);
+export const PRO_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_PRO_SECONDS_PER_MONTH ?? 45 * 60);
 /** Session tokens one install may request per hour, to blunt abuse of the public endpoint. */
 const TOKENS_PER_HOUR_PER_INSTALL = 60;
 const TOKENS_PER_HOUR_PER_IP = 120;
