@@ -5,7 +5,8 @@ import { SilenceDetector } from './audio/silenceDetector';
 import { readSettings } from './config';
 import { captureEditorContext, captureTarget, type EditorTracker, type QuestionTarget } from './context/editorContext';
 import { formatConversation, remember, type Exchange } from './context/conversation';
-import { findLineReferences } from './context/lineReferences';
+import { findFileMentions, findLineReferences, type LineReference } from './context/lineReferences';
+import { findRequestedFile, isFileOpenRequest } from './context/fileRequests';
 import { captureProject, languageOf, type WorkspaceIndex } from './context/workspaceIndex';
 import { AgentClient, ResumeFailedError } from './voice/AgentClient';
 import { fetchSuggestion } from './voice/suggestionClient';
@@ -102,6 +103,8 @@ export class SessionController implements vscode.Disposable {
   /** Line references in the answer that already have a highlight scheduled. */
   private highlightedRefs = 0;
   private highlightTimers: NodeJS.Timeout[] = [];
+  /** Files already opened for this turn, so a name said twice doesn't reopen it. */
+  private readonly openedPaths = new Set<string>();
   private readonly highlighter = new LineHighlighter();
   private readonly cards: CodeCards;
   /** The editor context the agent already has, so it's only resent when it changes. */
@@ -594,6 +597,28 @@ export class SessionController implements vscode.Disposable {
     // A long question arrives as several transcripts ("…I spread" + "Give me…").
     this.userText = this.userText ? `${this.userText} ${text}` : text;
     this.view.post({ type: 'userTranscript', turnId: this.turnId, text: this.userText });
+    this.openRequestedFile();
+  }
+
+  /**
+   * "Open the CSS file": the file the question itself asks for, opened as soon
+   * as it is heard. This waits for neither the answer nor the agent naming the
+   * file back, so being taken somewhere doesn't depend on speech coming through
+   * the same way twice. Once per turn: the name is often said again.
+   */
+  private openRequestedFile(): void {
+    if (!isFileOpenRequest(this.userText)) return;
+    const path = findRequestedFile(this.userText, this.index.knownPaths());
+    if (path === undefined) {
+      this.log.info(`Turn ${this.turnId}: asked for a file, but no single one matches "${this.userText.trim()}"`);
+      return;
+    }
+    if (this.openedPaths.has(path)) return;
+    const uri = this.index.uriFor(path);
+    if (!uri) return;
+    this.openedPaths.add(path);
+    this.log.info(`Turn ${this.turnId}: opening ${path}, which the question asked for`);
+    void this.highlighter.open(uri);
   }
 
   private onOutputTranscript(text: string, startMs: number | null): void {
@@ -643,22 +668,55 @@ export class SessionController implements vscode.Disposable {
       // A named project file wins over the open one: that's the file being talked about.
       const uri = ref.file ? this.index.uriFor(ref.file) : openUri;
       if (!uri) continue;
-      const word = this.wordTimes.find((w) => w.end >= ref.endOffset);
-      const playsAt = word && this.replyPlaysAt ? this.replyPlaysAt + word.startMs : this.playbackEndsAt;
-      const delay = Math.max(0, playsAt - Date.now() - HIGHLIGHT_LEAD_MS);
-      this.highlightTimers.push(
-        setTimeout(() => {
-          if (turn === this.turnId) void this.highlighter.show(uri, ref.start, ref.end);
-        }, delay),
-      );
+      this.atSpokenWord(ref.endOffset, () => {
+        if (turn === this.turnId) void this.highlighter.show(uri, ref.start, ref.end);
+      });
     }
     this.highlightedRefs = Math.max(this.highlightedRefs, refs.length);
+    this.scheduleFileOpens(refs, final);
+  }
+
+  /**
+   * Opens a file the answer names when the question asked to be taken to one
+   * ("open the stylesheet", "where is the font set?"). A file named with a line
+   * number is already opened by that line's highlight, so it is left alone, and
+   * a question about code opens nothing: the answer names files all the time.
+   */
+  private scheduleFileOpens(refs: LineReference[], final: boolean): void {
+    if (!isFileOpenRequest(this.userText)) return;
+    const text = this.modelText;
+    const settledLength = text.trimEnd().length;
+    const highlighted = new Set(refs.map((ref) => ref.file));
+    const turn = this.turnId;
+    for (const mention of findFileMentions(text, this.index.knownPaths())) {
+      if (highlighted.has(mention.path) || this.openedPaths.has(mention.path)) continue;
+      // The name may still be growing ("style" → "style.css") until the answer is done.
+      if (!final && mention.endOffset >= settledLength) continue;
+      const uri = this.index.uriFor(mention.path);
+      if (!uri) continue;
+      this.openedPaths.add(mention.path);
+      this.atSpokenWord(mention.endOffset, () => {
+        if (turn === this.turnId) void this.highlighter.open(uri);
+      });
+    }
+  }
+
+  /**
+   * Runs `act` as the word ending at `endOffset` in the answer is heard, so the
+   * editor follows along with the voice instead of racing ahead of it.
+   */
+  private atSpokenWord(endOffset: number, act: () => void): void {
+    const word = this.wordTimes.find((w) => w.end >= endOffset);
+    const playsAt = word && this.replyPlaysAt ? this.replyPlaysAt + word.startMs : this.playbackEndsAt;
+    const delay = Math.max(0, playsAt - Date.now() - HIGHLIGHT_LEAD_MS);
+    this.highlightTimers.push(setTimeout(act, delay));
   }
 
   private clearHighlights(): void {
     for (const timer of this.highlightTimers) clearTimeout(timer);
     this.highlightTimers = [];
     this.highlightedRefs = 0;
+    this.openedPaths.clear();
     this.highlighter.clear();
   }
 

@@ -118,9 +118,18 @@ function nameLookup(paths: string[]): Map<string, string> {
   return lookup;
 }
 
+/** A project file named out loud. */
+export interface FileMention {
+  path: string;
+  /** Offset in the text where the name starts. */
+  at: number;
+  /** Offset in the text just past the name. */
+  endOffset: number;
+}
+
 /** Where each file name was said, by its position in the text. */
-function findFileMentions(tokens: Token[], lookup: Map<string, string>): { path: string; at: number }[] {
-  const mentions: { path: string; at: number }[] = [];
+function mentionsIn(tokens: Token[], lookup: Map<string, string>): FileMention[] {
+  const mentions: FileMention[] = [];
   for (let i = 0; i < tokens.length; i++) {
     let spelled = '';
     let best: { path: string; at: number; next: number } | undefined;
@@ -131,16 +140,26 @@ function findFileMentions(tokens: Token[], lookup: Map<string, string>): { path:
       if (path) best = { path, at: tokens[i].start, next: j };
     }
     if (best) {
-      mentions.push({ path: best.path, at: best.at });
+      mentions.push({ path: best.path, at: best.at, endOffset: tokens[best.next].end });
       i = best.next;
     }
   }
   return mentions;
 }
 
+/**
+ * The project files named in a piece of speech, in the order they are said,
+ * with or without a line number. "Open style.css for me" names a file and
+ * nothing to highlight, so the file itself is what the answer points at.
+ */
+export function findFileMentions(text: string, knownPaths: string[]): FileMention[] {
+  if (knownPaths.length === 0) return [];
+  return mentionsIn(tokenize(text), nameLookup(knownPaths));
+}
+
 export function findLineReferences(text: string, knownPaths: string[] = []): LineReference[] {
   const tokens = tokenize(text);
-  const mentions = knownPaths.length > 0 ? findFileMentions(tokens, nameLookup(knownPaths)) : [];
+  const mentions = knownPaths.length > 0 ? mentionsIn(tokens, nameLookup(knownPaths)) : [];
   /** The file said nearest this point, so "in style.css, lines 4 and 9" marks both. */
   const fileNear = (at: number): string | undefined => {
     let best: { path: string; distance: number } | undefined;

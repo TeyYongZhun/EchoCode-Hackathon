@@ -2,7 +2,7 @@
   "name": "echocode",
   "displayName": "EchoCode",
   "description": "Voice-first AI pair programmer: select code, press a hotkey and ask out loud.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "echocode-hackathon",
   "private": true,
   "icon": "media/icon.png",

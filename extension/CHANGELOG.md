@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- **Ask EchoCode to open a file and it opens it.** "Open the globals.css file", "take me to LinkedList.java", "show me the HTML file": the file comes up in the editor with the cursor in it. Before, a file only opened as a side effect of EchoCode naming a line *inside* it, so asking for the file itself did nothing and EchoCode said it couldn't. Which file you meant is now worked out from what you said rather than from the answer, so it opens while EchoCode is still thinking, and it opens even when the answer never names it.
+- **Names heard slightly wrong still find the file.** Speech loses a letter more often than not: "global.css" now opens `globals.css`, and "the session controller file" opens `SessionController.ts`. A name that could mean two files opens neither, and EchoCode asks which one — moving the cursor into the wrong file is worse than not moving it at all.
+- **A file can be asked for by type** when the project holds only one of them: "open the HTML file".
+
 ## 0.1.3
 
 - **EchoCode reads your whole project, not just the open file.** Ask "where do I change the font?" while looking at `index.html` and it finds the rule in `style.css`, opens that file and highlights the line. Tested live on a small web app: 9 out of 9 questions opened the right file at the right line. Small projects are sent whole; larger ones send the files your open file references first and name the rest. `node_modules`, `.git` and build output are never sent.

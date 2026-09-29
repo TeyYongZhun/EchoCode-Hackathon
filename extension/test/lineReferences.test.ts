@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { findLineReferences } from '../src/context/lineReferences.ts';
+import { findFileMentions, findLineReferences } from '../src/context/lineReferences.ts';
 
 const ranges = (text: string) => findLineReferences(text).map(({ start, end }) => [start, end]);
 
@@ -96,4 +96,30 @@ test('a name that could mean two files marks neither', () => {
 test('the longest matching name wins, so an extension is not dropped', () => {
   const both = ['style.css', 'style.css.map'];
   assert.deepEqual(files('See line 2 of style dot css dot map.', both), ['style.css.map']);
+});
+
+// ---- Files named with no line number ---------------------------------------
+
+const mentioned = (text: string, paths = PROJECT) => findFileMentions(text, paths).map((m) => m.path);
+
+test('finds a file named on its own, so "open style.css" has somewhere to go', () => {
+  assert.deepEqual(mentioned('Sure, opening style.css for you.'), ['style.css']);
+  assert.deepEqual(mentioned('Opening style dot c s s now.'), ['style.css']);
+  assert.deepEqual(mentioned('That lives in the helpers file.'), ['src/util/helpers.ts']);
+});
+
+test('finds every file named, in the order they are said', () => {
+  assert.deepEqual(mentioned('index.html pulls in script.js.'), ['index.html', 'script.js']);
+});
+
+test('a name that matches nothing in the project is not a file', () => {
+  assert.deepEqual(mentioned('Opening the settings for you.'), []);
+  assert.deepEqual(mentioned('Opening style.css.', []), []);
+});
+
+test('reports where each name ends, so a half-streamed name can wait', () => {
+  const text = 'Opening style.css';
+  const [mention] = findFileMentions(text, PROJECT);
+  assert.equal(mention.endOffset, text.length);
+  assert.equal(text.slice(mention.at, mention.endOffset), 'style.css');
 });

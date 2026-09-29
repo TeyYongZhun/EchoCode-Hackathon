@@ -4,7 +4,8 @@ import * as vscode from 'vscode';
  * Lights up the lines EchoCode is talking about. When it names another file in
  * the project ("line 12 of style.css"), that file is opened so the developer
  * sees what is meant. It opens without taking keyboard focus: the answer is
- * still playing, and they may be typing.
+ * still playing, and they may be typing. `open` is the exception, for when
+ * they asked to be taken to a file rather than told about one.
  */
 export class LineHighlighter implements vscode.Disposable {
   private readonly decoration = vscode.window.createTextEditorDecorationType({
@@ -33,6 +34,24 @@ export class LineHighlighter implements vscode.Disposable {
     editor.setDecorations(this.decoration, [range]);
     editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
     this.highlighted = editor;
+  }
+
+  /**
+   * Brings `uri` on screen with nothing highlighted, for when the file itself
+   * is the answer ("open the stylesheet"). Unlike a highlight this takes the
+   * cursor with it: they asked to be moved there, so that is where they land.
+   */
+  async open(uri: vscode.Uri): Promise<void> {
+    const mine = ++this.sequence;
+    try {
+      const document = await vscode.workspace.openTextDocument(uri);
+      if (mine !== this.sequence) return;
+      this.clear();
+      // A real tab, not a preview: this one was asked for and should stay put.
+      await vscode.window.showTextDocument(document, { preview: false });
+    } catch {
+      // Deleted, binary, or otherwise unopenable: say nothing rather than fail the answer.
+    }
   }
 
   private async editorFor(uri: vscode.Uri): Promise<vscode.TextEditor | undefined> {
