@@ -17,7 +17,11 @@ export class AudioPlayer {
   }
 
   async unlock(): Promise<void> {
-    await this.ensureContext().resume();
+    try {
+      await this.ensureContext().resume();
+    } catch {
+      // Refused because nothing has been clicked yet; the panel asks them to.
+    }
   }
 
   enqueue(base64: string): void {

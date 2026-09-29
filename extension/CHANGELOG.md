@@ -2,13 +2,13 @@
 
 ## 0.1.3
 
-- **A calmer robot.** The bubble by the robot now shows only what EchoCode is doing (Asleep, Listening, Thinking, Speaking) instead of repeating the answer as subtitles. The words are in the conversation just above it, and a half-finished sentence no longer lingers there after an answer ends.
-
 - **EchoCode reads your whole project, not just the open file.** Ask "where do I change the font?" while looking at `index.html` and it finds the rule in `style.css`, opens that file and highlights the line. Tested live on a small web app: 9 out of 9 questions opened the right file at the right line. Small projects are sent whole; larger ones send the files your open file references first and name the rest. `node_modules`, `.git` and build output are never sent.
-
 - **EchoCode starts asleep and wakes with a hello.** Nothing connects until you first press the hotkey; that press opens the session and EchoCode greets you straight away, inviting you to ask about anything in the project rather than only the file you have open. It shows "Waking up…" until the greeting speaks, never "Thinking…" — there was no question to think about. Because the connection happens during the greeting, the first real question starts answering in about 1.1 seconds instead of 2.2. If the greeting doesn't arrive, EchoCode goes quietly to Ready instead of reporting a failed answer.
-- **A microphone notice on first install**, with a button that runs the microphone test.
 - **Plainer answers.** The voice now answers in two to four short sentences, explains a term the first time it uses one ("a null pointer exception, which is when the code tries to follow a link that points to nothing"), and stops asking a check-up question at the end of every answer. Asking it to "just fix it" now gets the fix instead of an offer to explain. Measured against the old prompt on the same spoken questions: about a third fewer words, and no filler questions in six runs.
+- **A calmer robot.** The bubble by the robot now shows only what EchoCode is doing (Asleep, Listening, Thinking, Speaking) instead of repeating the answer as subtitles. The words are in the conversation just above it, and a half-finished sentence no longer lingers there after an answer ends.
+- **A "Get started" card in the panel.** An empty panel used to be a robot and nothing else. It now opens with four short steps — allow the microphone, hold the hotkey and ask, ⚙ Settings, ■ Stop — each carrying the icon of the button it describes, and it ends by naming the default hotkey. It isn't dismissed: your first question pushes it up out of the way, and scrolling to the top of the conversation brings it back.
+- **You are told straight away when the voice can't be heard.** VS Code panels stay muted until you click inside one, and waking EchoCode is a keypress in the editor, so the greeting used to play silently. The panel now checks the moment it loads and, if it is muted, says so in the robot's own bubble and in a bar above it: click anywhere in the panel once and the voice works for the rest of the session.
+- **A microphone notice on first install**, with a button that runs the microphone test.
 
 ## 0.1.2
 

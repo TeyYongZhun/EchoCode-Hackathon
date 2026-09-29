@@ -49,11 +49,49 @@ const BACKGROUND_LABELS: Record<PanelBackground, string> = {
   vscode: 'VS Code theme',
 };
 
+/** Line art for the two steps that have no button to point at. */
+const MIC_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3.5"/></svg>`;
+const ASK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 3.5H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3v4l4.5-4H20a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2Z"/><path d="M10 7.5 8 10l2 2.5"/><path d="m14 7.5 2 2.5-2 2.5"/></svg>`;
+
+/**
+ * The first thing in the panel, before there's any conversation to show. It
+ * scrolls away under the first question rather than being dismissed, so it's
+ * still there the next time someone forgets which button does what.
+ * `{key}` becomes the hotkey, styled as a key when we know which one it is.
+ */
+const GUIDE_STEPS: { icon: string; title: string; body: string }[] = [
+  {
+    icon: MIC_ICON,
+    title: 'Let EchoCode hear you',
+    body: 'VS Code asks for the microphone once, the first time you wake it. Allow it — that permission is the whole conversation.',
+  },
+  {
+    icon: ASK_ICON,
+    title: 'Ask anything about your project',
+    body: 'Hold {key} and speak, then let go. Try "what does this file do?" or "where do I change the heading?" — EchoCode reads the project, opens the file it means and highlights the lines.',
+  },
+  {
+    icon: '⚙',
+    title: 'Settings',
+    body: 'Your plan, the minutes left this month, the hotkey and the panel colour.',
+  },
+  {
+    icon: '■',
+    title: 'Stop',
+    body: 'Cuts an answer off the moment you have heard enough. Pressing the hotkey while it talks does the same, and starts your next question.',
+  },
+];
+
 const app = document.getElementById('app')!;
 app.className = 'app';
 app.dataset.state = 'asleep';
 app.innerHTML = `
   <section class="log" aria-label="Conversation history">
+    <section class="guide" aria-label="Getting started">
+      <h2>Get started</h2>
+      <ol class="steps"></ol>
+      <p class="guide-foot"></p>
+    </section>
     <ol class="entries"></ol>
     <button class="to-latest" hidden>↓ Latest</button>
   </section>
@@ -93,7 +131,7 @@ app.innerHTML = `
       </div>
     </div>
   </section>
-  <div class="notice" hidden>Your browser paused audio. <button class="unlock">Enable voice</button></div>
+  <div class="notice" hidden>EchoCode can't be heard yet. <button class="unlock">Enable voice</button></div>
   <section class="stage">
     <div class="robot" role="img" aria-label="EchoCode">
       <span class="ring"></span>${ROBOT_SVG}
@@ -111,6 +149,8 @@ app.innerHTML = `
 
 const $ = <T extends HTMLElement>(selector: string) => app.querySelector<T>(selector)!;
 const entries = $<HTMLOListElement>('.entries');
+const steps = $<HTMLOListElement>('.steps');
+const guideFoot = $('.guide-foot');
 const log = $('.log');
 const toLatest = $<HTMLButtonElement>('.to-latest');
 const bubble = $('.bubble');
@@ -133,6 +173,10 @@ const notice = $('.notice');
 
 let state: SessionState = 'asleep';
 let hotkey = 'Ctrl+Alt+Space';
+/** A rebound hotkey has no name we can print, so the guide stops drawing a key cap. */
+let hotkeyCustom = false;
+/** The key EchoCode ships with. Still worth naming once someone has rebound it. */
+let hotkeyDefault = 'Ctrl+Alt+Space';
 let latestTurn = 0;
 let micLevel = 0;
 let shownLevel = 0;
@@ -141,16 +185,61 @@ let showingError = false;
 /** The latest usage for the Settings view; undefined until the backend has answered. */
 let usage: Usage | 'off' | 'error' | undefined;
 
+// ---- Getting started ------------------------------------------------------
+
+function keyCap(label: string, className = 'key'): HTMLSpanElement {
+  const key = document.createElement('span');
+  key.className = className;
+  key.textContent = label;
+  return key;
+}
+
+function renderGuide(): void {
+  // Named even when it has been rebound, since that's exactly when nothing else says it.
+  // A dash, not a full stop: the key cap's own padding makes a stop look like a stray dot.
+  guideFoot.replaceChildren('Default hotkey: ', keyCap(hotkeyDefault), ' — change it in ⚙ Settings.');
+  steps.replaceChildren(
+    ...GUIDE_STEPS.map(({ icon, title, body }) => {
+      const li = document.createElement('li');
+      li.className = 'step';
+
+      const iconEl = document.createElement('span');
+      iconEl.className = 'step-icon';
+      iconEl.setAttribute('aria-hidden', 'true');
+      // A step about a button wears that button's own glyph, so there's nothing to match up.
+      if (icon.startsWith('<svg')) iconEl.innerHTML = icon;
+      else iconEl.textContent = icon;
+
+      const text = document.createElement('div');
+      const titleEl = document.createElement('b');
+      titleEl.className = 'step-title';
+      titleEl.textContent = title;
+      const bodyEl = document.createElement('span');
+      bodyEl.className = 'step-body';
+      const [before, after] = body.split('{key}');
+      bodyEl.append(before);
+      if (after !== undefined) bodyEl.append(keyCap(hotkey, hotkeyCustom ? 'plain-key' : 'key'), after);
+      text.append(titleEl, bodyEl);
+
+      li.append(iconEl, text);
+      return li;
+    }),
+  );
+}
+
 // ---- Bubble ---------------------------------------------------------------
 
-function setBubble(words: string, kind: 'hint' | 'error' = 'hint'): void {
+/** 'alert' sits between the two: something to act on, not something that has gone wrong. */
+function setBubble(words: string, kind: 'hint' | 'alert' | 'error' = 'hint'): void {
   wordsEl.textContent = words;
   bubble.dataset.kind = kind;
   showingError = kind === 'error';
 }
 
 function showHint(): void {
-  if (state === 'asleep') setBubble(`Press ${hotkey} to wake EchoCode.`, 'hint');
+  // Eyes go to the robot, so the one thing standing between them and hearing it belongs here.
+  if (player.blocked) setBubble(`press ${hotkey} to awake the robot`, 'alert');
+  else if (state === 'asleep') setBubble(`Press ${hotkey} to wake EchoCode.`, 'hint');
   else setBubble(`Hold ${hotkey} and ask about your code.`, 'hint');
 }
 
@@ -218,6 +307,9 @@ function renderUsage(): void {
 /** Once the user may have rebound the hotkey, the panel stops naming the default key. */
 function applyHotkey(label: string, custom: boolean): void {
   hotkey = custom ? 'your EchoCode hotkey' : label;
+  hotkeyCustom = custom;
+  hotkeyDefault = label;
+  renderGuide();
   hotkeyNameEl.textContent = custom ? 'Custom' : label;
   hotkeyHelpEl.textContent = `${custom ? `Default: ${label}. ` : ''}Hold it and ask, let go to send. Or tap it to start and tap again to send.`;
   if ((state === 'idle' || state === 'asleep') && !showingError) showHint();
@@ -379,7 +471,7 @@ function onState(next: SessionState): void {
       break;
     case 'speaking':
       // The answer itself is in the conversation above; here, say how to cut it short.
-      setBubble(`Speaking… press ${hotkey} to interrupt.`, 'hint');
+      showSpeaking();
       break;
     case 'idle':
       // Nothing lingers now that the bubble holds no words, so the hint comes straight back.
@@ -392,7 +484,12 @@ function onMessage(message: ToWebview): void {
   switch (message.type) {
     case 'hello':
       hotkey = message.hotkey;
+      hotkeyDefault = message.hotkey;
+      renderGuide();
       if ((state === 'idle' || state === 'asleep') && !showingError) showHint();
+      // Find out now whether the voice can be heard. Waking EchoCode is a keypress in the
+      // editor, not a click in here, so without this the first thing they'd miss is the greeting.
+      void unlockAudio();
       break;
     case 'state':
       onState(message.state);
@@ -409,6 +506,8 @@ function onMessage(message: ToWebview): void {
     case 'audio':
       player.enqueue(message.data);
       notice.hidden = !player.blocked;
+      // The state arrived before the first chunk, so only now is it clear it can't be heard.
+      if (player.blocked && state === 'speaking') showSpeaking();
       break;
     case 'flushAudio':
       player.flush();
@@ -479,13 +578,30 @@ window.addEventListener('message', (event: MessageEvent<ToWebview>) => onMessage
 
 // ---- User actions ---------------------------------------------------------
 
+/** "Speaking…" is a lie while the voice is blocked, so say what to do about it instead. */
+function showSpeaking(): void {
+  if (player.blocked) setBubble('Click anywhere here to hear this answer.', 'alert');
+  else setBubble(`Speaking… press ${hotkey} to interrupt.`, 'hint');
+}
+
+/** What the bubble last assumed about being heard; undefined until the audio context exists. */
+let shownBlocked: boolean | undefined;
+
 async function unlockAudio(): Promise<void> {
   await player.unlock();
   notice.hidden = !player.blocked;
+  if (player.blocked === shownBlocked) return;
+  shownBlocked = player.blocked;
+  // Being heard or not changes what the bubble should say, so redraw it — but only where
+  // the message is about that. "Listening…" and "Thinking…" are true either way.
+  if (state === 'speaking') showSpeaking();
+  else if ((state === 'idle' || state === 'asleep') && !showingError) showHint();
 }
 
 // Any click in the panel lets the browser play audio, in case it's holding it back.
 app.addEventListener('pointerdown', () => void unlockAudio());
+// Typing in the panel is a gesture too, so the mouse isn't the only way out of a blocked voice.
+document.addEventListener('keydown', () => void unlockAudio());
 $('.stop').addEventListener('click', () => vscode.postMessage({ type: 'stop' }));
 openSettings.addEventListener('click', () => setSettingsOpen(settings.hidden));
 toLatest.addEventListener('click', showLatest);
@@ -546,5 +662,6 @@ function animate(): void {
 }
 requestAnimationFrame(animate);
 
+renderGuide();
 showHint();
 vscode.postMessage({ type: 'ready' });

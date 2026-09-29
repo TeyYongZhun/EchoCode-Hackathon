@@ -100,7 +100,7 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 | `DuplicateFinder.java` | the `findDuplicates` method | *"Why is this so slow with a big list? How do I fix it?"* Then click **Replace lines** on the code card. |
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
 
-The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
+The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. The panel opens on a **Get started** card covering the microphone, the hotkey (including the default one, in case you've rebound it), ⚙ Settings and ■ Stop; your first question pushes it out of the way, and scrolling back to the top of the conversation brings it back. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
 
 ## What's new in 0.1.3
 
@@ -108,6 +108,8 @@ The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** show
 - **Wakes with a hello.** EchoCode starts asleep and connects to nothing. One press of the hotkey wakes it, and because the connection happens while it greets you, the first real question answers in about 1.1 seconds instead of 2.2.
 - **Plainer answers.** Two to four short sentences, a technical term explained the first time it is used, and no check-up question tacked onto every answer. Ask it to just fix something and it does.
 - **A calmer panel.** The robot's bubble shows only what EchoCode is doing — Asleep, Listening, Thinking, Speaking — while the words appear in the conversation above it.
+- **A "Get started" card** on an empty panel: allow the microphone, hold the hotkey and ask, ⚙ Settings, ■ Stop — each with the icon of the button it describes, and the default hotkey named at the bottom. Your first question pushes it out of the way; scrolling back to the top brings it back.
+- **You are told when the voice can't be heard.** VS Code panels stay muted until you click inside one, so the greeting could play silently. The panel now says so in the robot's bubble and in a bar above it; one click anywhere in the panel fixes it for the session.
 - **A microphone notice on first install**, with a button that runs the microphone test.
 
 ## Tech stack
@@ -201,7 +203,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | Where | Command | What it does |
 |---|---|---|
 | `extension/` | `npm run dev` | Builds EchoCode and opens VS Code on `demo/` with it loaded |
-| `extension/` | `npm test` | Unit tests: editor and project context, line and file references, conversation memory, where code is inserted, hotkey handling, audio and resampling |
+| `extension/` | `npm test` | 81 unit tests: editor and project context, line and file references, conversation memory, where code is inserted, hotkey handling, the voice client, audio and resampling |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the window to pick up changes) |
 | `extension/` | `npm run package` | Builds `echocode-0.1.3.vsix` with the microphone library for every platform |
@@ -247,6 +249,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | Double-clicking the `.vsix` opens "VSIX Installer" and fails | That's Visual Studio's installer. Use **Extensions view → ⋯ → Install from VSIX…** in VS Code instead. |
 | "Couldn't open the microphone" or silence in the mic test | On Windows, turn on **Settings → Privacy & security → Microphone → Let desktop apps access your microphone**, then run **EchoCode: Choose Microphone**. |
 | "I didn't hear anything" | No speech was detected, so nothing was sent. Speak closer to the microphone. |
+| The panel says **"EchoCode can't be heard yet"** | VS Code keeps a panel muted until you click inside it, and the hotkey is pressed in the editor. Click anywhere in the panel once, or press **Enable voice**; it lasts the rest of the session and comes back only after a window reload. |
 | "EchoCode didn't answer that time" | No answer arrived within 20 seconds. Ask again; if it repeats, check **View → Output → EchoCode** for the reason. |
 | "Extension host did not start in 10 seconds" | The window is waiting for a debugger. Close it and use `npm run dev` in `extension/` instead. |
 | "Can't reach the EchoCode backend" | Check your internet connection, or run the backend locally. |

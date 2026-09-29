@@ -265,6 +265,15 @@ button {
   color: var(--danger);
 }
 
+/* Something to do, not something broken: the same amber as the notice above it. */
+.bubble[data-kind='alert'] {
+  border-color: var(--amber);
+}
+
+.bubble[data-kind='alert'] .words {
+  color: var(--amber);
+}
+
 .bubble .meta {
   display: flex;
   gap: 12px;
@@ -322,19 +331,35 @@ button {
   color: var(--cyan);
 }
 
+/* The voice can't play until the panel is clicked, so this has to be impossible to miss. */
 .notice {
-  margin: 0 14px;
-  padding: 6px 10px;
-  border-left: 3px solid var(--amber);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 14px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
   color: var(--text);
-  background: var(--surface);
+  background: rgba(255, 195, 77, 0.14);
+  box-shadow: 0 0 20px rgba(255, 195, 77, 0.12);
+  font-weight: 600;
+}
+
+/* An explicit display would otherwise beat the hidden attribute and pin this open. */
+.notice[hidden] {
+  display: none;
 }
 
 .notice button {
+  flex: none;
+  padding: 5px 14px;
   border: none;
-  color: var(--cyan);
-  background: none;
-  text-decoration: underline;
+  border-radius: 6px;
+  color: #1a1200;
+  background: var(--amber);
+  font-weight: 700;
 }
 
 /* ---- Conversation log and Settings (above the stage; one at a time) ---- */
@@ -344,6 +369,14 @@ button {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Column flex so the guide can push itself down to the robot while the panel is
+   empty. (An auto top margin, not justify-content: flex-end, which makes the top
+   of a scrolling column unreachable.) */
+.log {
+  display: flex;
+  flex-direction: column;
 }
 
 .log[hidden],
@@ -356,6 +389,7 @@ button {
   position: sticky;
   bottom: 8px;
   display: block;
+  flex: none;
   margin: 0 14px 8px auto;
   padding: 3px 12px;
   border: 1px solid var(--cyan);
@@ -576,7 +610,104 @@ button {
   background: transparent;
 }
 
+/* ---- Getting started: the first thing in the log, scrolled away by the first question ---- */
+
+.guide {
+  flex: none;
+  /* Sits just above the robot on an empty panel; pushed up by the first question. */
+  margin: auto 14px 2px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.guide h2 {
+  margin: 0 0 12px;
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.steps {
+  display: grid;
+  gap: 13px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 11px;
+  align-items: start;
+}
+
+/* Square like the controls below, so a step about a button looks like that button. */
+.step-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--cyan);
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.step-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.step-title {
+  display: block;
+  padding-top: 4px;
+  font-weight: 600;
+}
+
+.step-body {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+/* Under a line across the card: the one fact people come back to look up. */
+.guide-foot {
+  margin: 13px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.key {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--surface-2);
+  font-family: var(--code-font);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* A rebound hotkey is described, not named, so it gets emphasis instead of a key cap. */
+.plain-key {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .entries {
+  flex: none;
   margin: 0;
   padding: 8px 0;
   list-style: none;

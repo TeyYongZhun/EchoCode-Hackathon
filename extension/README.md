@@ -6,12 +6,16 @@ Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gate
 
 ## How to use it
 
+The panel itself opens on a **Get started** card with these steps and the default hotkey; your first question pushes it up out of the way, and scrolling to the top of the conversation brings it back.
+
 1. Press **`Ctrl+Alt+Space`** (`Ctrl+Shift+Space` on macOS) once to wake EchoCode. It says hello and stays ready.
 2. **Hold the same key**, ask your question and let go. You can also tap the key or click **EchoCode** in the status bar, speak, and tap again. Select some code first if your question is about a particular part.
 3. Listen. The answer appears in the conversation in the **EchoCode** tab of the right panel, and the lines it mentions light up in your editor. If the answer is in another file, that file opens.
 4. When it proposes a change, use **Replace lines** or **Insert at Cursor** on the code card in the conversation.
 
 Press the key while EchoCode is talking to interrupt it with a new question.
+
+VS Code keeps a panel muted until you click inside it, so after a restart the panel may say it can't be heard yet. Click anywhere in it once and the voice works for the rest of the session.
 
 Click **⚙** in the panel to see your plan and minutes left this month, upgrade to Pro, change the hotkey (it opens Keyboard Shortcuts at **EchoCode: Talk**), or change the panel background.
 
