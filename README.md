@@ -65,7 +65,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 ## Architecture
 
-![EchoCode architecture: the moment you press the hotkey the extension captures the open file, the whole project and the conversation so far, then streams them with mic audio to AssemblyAI's Voice Agent API over one paced WebSocket session. The spoken answer plays in the panel while the extension highlights the lines being named, opens files you asked for and offers a code card. A Next.js backend on Vercel holds the AssemblyAI key, mints single-use tokens, writes code cards through the LLM Gateway and meters usage in Upstash Redis.](docs/architecture.svg)
+![EchoCode architecture: the moment you press the hotkey the extension captures the open file, the whole project and the conversation so far, then streams them with mic audio to AssemblyAI's Voice Agent API over one paced WebSocket session. The spoken answer plays in the panel while the extension highlights the lines being named, opens files you asked for and offers a code card. A Next.js backend on Vercel holds the AssemblyAI key, mints single-use tokens, writes code cards through the LLM Gateway and meters usage in Upstash Redis.]()
 
 - **The key stays safe.** Only the backend on Vercel knows the AssemblyAI API key. The extension gets a single-use token that expires within two minutes.
 - **The voice is fast.** Audio goes straight from VS Code to AssemblyAI, with no server in between.
