@@ -13,10 +13,10 @@
   "homepage": "https://echo-code-hackathon.vercel.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TeyYongZhun/EchoCode_Hackathon.git"
+    "url": "https://github.com/TeyYongZhun/EchoCode-Hackathon.git"
   },
   "bugs": {
-    "url": "https://github.com/TeyYongZhun/EchoCode_Hackathon/issues"
+    "url": "https://github.com/TeyYongZhun/EchoCode-Hackathon/issues"
   },
   "engines": {
     "vscode": "^1.95.0"

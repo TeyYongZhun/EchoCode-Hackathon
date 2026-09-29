@@ -19,11 +19,11 @@ EchoCode is a VS Code extension that lets you ask about your code out loud and h
 ## In 30 seconds
 
 - **The problem:** asking an AI about your code means typing long prompts and copy-pasting code into a chat window. Students skip it and paste answers they don't understand.
-- **Our solution:** hold one key and ask out loud. EchoCode reads your whole project, answers by voice, opens the file it is talking about and lights up the lines, then hands you the fix as one-click code.
+- **Our solution:** hold one key and ask out loud. EchoCode reads the file you're in *and the rest of your project*, answers by voice, opens the file it is talking about and lights up the lines, then hands you the fix as one-click code.
 - **Built on AssemblyAI:** the **Voice Agent API** runs the spoken conversation, and the **LLM Gateway** writes the code for suggested fixes.
 - **Who it's for:** computer science students and junior developers who learn best by talking a problem through.
 
-## The problem
+## Problem Statement
 
 When you hit a hard algorithm or unfamiliar code, today's AI assistants make you:
 
@@ -58,7 +58,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 | AssemblyAI product | What it does in EchoCode |
 |---|---|
-| **Voice Agent API** | Runs the whole spoken conversation in one streaming session: it hears the question, reasons over your code and speaks the answer. Coding **key terms** (HashSet, generics, null pointer…) improve recognition, **semantic turn detection** knows when you've finished, **interruptions** are built in, and **word-level timing** lights up each line at the moment it is spoken. |
+| **Voice Agent API** | Runs the whole spoken conversation in one streaming session: it hears the question, reasons over your code and speaks the answer. Coding **key terms** (HashSet, generics, null pointer…) improve recognition, **turn detection** closes the question when you stop talking (EchoCode also nudges it on hotkey release), and **word-level timing** lights up each line at the moment it is spoken. Interrupting a playing answer is handled by EchoCode: the session is ended and the next question opens a fresh one, carrying the conversation so far. |
 | **LLM Gateway** | Writes the exact code behind a suggested fix as JSON, using `qwen3.5-4b-32k-fast` (set `ASSEMBLYAI_SUGGEST_MODEL` to use a stronger model your account has access to). It runs after the voice answer, so it never slows the conversation down. |
 | **Single-use tokens** | Our backend keeps the AssemblyAI API key secret and gives the extension a short-lived token for each conversation. |
 
@@ -69,6 +69,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 - **The key stays safe.** Only the backend on Vercel knows the AssemblyAI API key. The extension gets a single-use token that expires within two minutes.
 - **The voice is fast.** Audio goes straight from VS Code to AssemblyAI, with no server in between.
 - **Costs stay low.** Unused sessions close after 3 minutes, and each user's voice minutes are counted in Upstash Redis against their plan.
+- **What leaves your machine.** Your audio and the editor/project context go to AssemblyAI to be answered. The code-card request (context, question, spoken answer) is posted to our Vercel backend, which forwards it to the LLM Gateway; it isn't stored. Redis only ever holds a random install id and seconds of voice used.
 
 ## Business model
 
@@ -78,8 +79,8 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 | Plan | Price | Voice minutes | Includes |
 |---|---|---|---|
-| Free | $0 | 15 a month, about 20 questions | Spoken answers, project-wide questions, line highlights, one-click code cards |
-| Pro | $15/month, or $144/year | 150 a month, about 200 questions | Everything in Free, plus a stronger AI model for code fixes, larger code context and minute top-ups |
+| Free | $0 | 15 a month, about 20 questions | Spoken answers, project-wide questions, line highlights, one-click code cards — all shipping today |
+| Pro (not on sale yet) | $15/month, or $144/year | 150 a month, about 200 questions | Everything in Free, plus minute top-ups. Planned, not yet built: a stronger model behind code cards and more project context per question |
 
 - **Teams and universities (coming next):** shared minutes for companies, and a campus plan with an instructor view showing which concepts students struggle with.
 - **Unit economics:** the Voice Agent API costs $0.075 a minute, so a free user costs at most $1.13 a month and a Pro user at most $11.25, less than they pay. The average student in published classroom studies asks 8 to 20 AI questions a month, which fits inside Free. Question counts assume about 0.75 minutes of session time per question.
@@ -101,16 +102,6 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
 
 The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. The panel opens on a **Get started** card covering the microphone, the hotkey (including the default one, in case you've rebound it), ⚙ Settings and ■ Stop; your first question pushes it out of the way, and scrolling back to the top of the conversation brings it back. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
-
-## What's new in 0.1.3
-
-- **Answers about your whole project.** Ask "where do I change the font?" while looking at `index.html` and EchoCode finds the rule in `style.css`, opens that file and highlights the line. Tested live on a small web app: 9 of 9 questions landed on the right file and line.
-- **Wakes with a hello.** EchoCode starts asleep and connects to nothing. One press of the hotkey wakes it, and because the connection happens while it greets you, the first real question answers in about 1.1 seconds instead of 2.2.
-- **Plainer answers.** Two to four short sentences, a technical term explained the first time it is used, and no check-up question tacked onto every answer. Ask it to just fix something and it does.
-- **A calmer panel.** The robot's bubble shows only what EchoCode is doing — Asleep, Listening, Thinking, Speaking — while the words appear in the conversation above it.
-- **A "Get started" card** on an empty panel: allow the microphone, hold the hotkey and ask, ⚙ Settings, ■ Stop — each with the icon of the button it describes, and the default hotkey named at the bottom. Your first question pushes it out of the way; scrolling back to the top brings it back.
-- **You are told when the voice can't be heard.** VS Code panels stay muted until you click inside one, so the greeting could play silently. The panel now says so in the robot's bubble and in a bar above it; one click anywhere in the panel fixes it for the session.
-- **A microphone notice on first install**, with a button that runs the microphone test.
 
 ## Tech stack
 
