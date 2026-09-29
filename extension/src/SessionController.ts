@@ -10,7 +10,7 @@ import { findRequestedFile, isFileOpenRequest } from './context/fileRequests';
 import { captureProject, languageOf, type WorkspaceIndex } from './context/workspaceIndex';
 import { AgentClient, ResumeFailedError } from './voice/AgentClient';
 import { fetchSuggestion } from './voice/suggestionClient';
-import { fetchSessionTicket } from './voice/tokenProvider';
+import { fetchSessionTicket, type SessionTicket } from './voice/tokenProvider';
 import { reportUsage } from './voice/usageClient';
 import { HotkeyPresses } from './hotkeyPresses';
 import type { SessionState } from './protocol';
@@ -52,6 +52,12 @@ const REPLY_TIMEOUT_MS = 20_000;
 const NO_REPLY = "EchoCode didn't answer that time. Please ask again.";
 /** Give up on the wake-up greeting after this; it normally starts within half a second. */
 const GREETING_TIMEOUT_MS = 6000;
+/**
+ * How long a token fetched ahead of time may be held. The backend gives 120 s
+ * to redeem one, so this leaves room to spare; an older one is thrown away and
+ * fetched again rather than risking a session that can't open.
+ */
+const SPARE_TICKET_MS = 75_000;
 /**
  * Most the editor and project context may take together. Measured against the
  * live Voice Agent: a session.update much over 64 KB is rejected outright, so
@@ -126,6 +132,14 @@ export class SessionController implements vscode.Disposable {
   private replyTimer: NodeJS.Timeout | undefined;
   /** The connection attempt in progress, shared by a question and a background reconnect. */
   private connecting: Promise<void> | undefined;
+  /**
+   * A token fetched before it was needed. Measured against the live backend, a
+   * token request takes 0.7–1.0 s, and every fresh session waits on one: after
+   * an interrupted answer that wait lands in the middle of the next question.
+   * Fetching it while nothing is happening takes it off that path.
+   */
+  private spareTicket: { ticket: SessionTicket; at: number } | undefined;
+  private prefetching = false;
   private idleCloseTimer: NodeJS.Timeout | undefined;
   private lastActivityAt = 0;
   private lastWarmReconnectAt = 0;
@@ -409,13 +423,46 @@ export class SessionController implements vscode.Disposable {
     return this.connecting;
   }
 
+  /**
+   * A ticket for the next session: the spare when one is waiting and still
+   * redeemable, otherwise a fresh request. The backend gives 120 s to redeem a
+   * token, so a spare is only used well inside that.
+   */
+  private async takeTicket(backendUrl: string): Promise<SessionTicket> {
+    const spare = this.spareTicket;
+    this.spareTicket = undefined;
+    if (spare && Date.now() - spare.at < SPARE_TICKET_MS) {
+      this.log.info(`Using a token fetched ${Date.now() - spare.at} ms ago`);
+      return spare.ticket;
+    }
+    return fetchSessionTicket(backendUrl, this.installId);
+  }
+
+  /**
+   * Fetches the next session's token in the background. Called when a session
+   * ends or opens, never on the path of a question, and it stays quiet about
+   * failures: the next question fetches its own token as it always did.
+   */
+  private prefetchTicket(): void {
+    if (this.prefetching || this.spareTicket) return;
+    this.prefetching = true;
+    void fetchSessionTicket(readSettings().backendUrl, this.installId)
+      .then((ticket) => {
+        this.spareTicket = { ticket, at: Date.now() };
+      })
+      .catch((err: unknown) => this.log.info(`Couldn't fetch a token ahead of time: ${errorMessage(err)}`))
+      .finally(() => {
+        this.prefetching = false;
+      });
+  }
+
   /** Connects, resuming a recently dropped session (and its conversation) when possible. */
   private async openSession(greet: boolean): Promise<void> {
     const backendUrl = readSettings().backendUrl;
     const resuming = this.live.canResume;
     let resumed = resuming;
     const started = Date.now();
-    let ticket = await fetchSessionTicket(backendUrl, this.installId);
+    let ticket = await this.takeTicket(backendUrl);
     try {
       await this.live.connect(ticket, greet);
     } catch (err) {
@@ -432,6 +479,9 @@ export class SessionController implements vscode.Disposable {
     this.lastContext = undefined;
     this.scheduleIdleClose();
     this.log.info(`Connected in ${Date.now() - started} ms${resuming ? ', continuing the earlier conversation' : ''}`);
+    // Whatever ends this session — an interrupted answer, the idle close — the
+    // next one starts with its token already in hand.
+    this.prefetchTicket();
   }
 
   /** Ends the session once EchoCode has sat unused for a while, so idle time isn't billed. */
@@ -530,6 +580,9 @@ export class SessionController implements vscode.Disposable {
     this.log.info('Ending the voice session so the answer in progress stops; the next question starts a fresh one');
     this.live.close();
     this.lastContext = undefined;
+    // The user interrupted to say something, so the next session is moments
+    // away: fetch its token now rather than in the middle of that question.
+    this.prefetchTicket();
   }
 
   /** Keeps this turn's question and answer (once) for sessions that start later. */

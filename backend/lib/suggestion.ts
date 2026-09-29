@@ -32,9 +32,24 @@ const CODE_CARD_SCHEMA = {
  * Only answers that propose a change get a code card. Checking the spoken
  * answer first skips a model call for pure explanations, and stops a small
  * model from inventing a fix nobody talked about.
+ *
+ * Kept wide on purpose: the model is asked again, in the prompt, to set
+ * hasCode false when an answer only explains, so a word matched here that
+ * turns out to be explanation costs one gateway call and shows no card. An
+ * answer missed here shows no card at all, which is the worse failure — "I'll
+ * add that brace on line 21 for you" used to be missed, because only "add a"
+ * and "add the" were matched.
  */
 const PROPOSES_CHANGE =
-  /\b(swap|replace|change|switch|instead|should|fix|rewrite|refactor|rename|you can|you could|try|add an?|add the|remove|delete|move|wrap|initiali[sz]e|update)\b/i;
+  /\b(swap|replace|change|switch|instead|should|fix|rewrite|refactor|rename|try|add|insert|missing|close|remove|delete|move|wrap|initiali[sz]e|update|use|make|need|write|declare|you can|you could|i'll|i will|let's)\b/i;
+
+/**
+ * The developer asked for a change outright ("can you help me fix the bug?").
+ * Then the card is offered whatever words the answer happened to use, because
+ * a fix was the thing they asked for.
+ */
+const ASKS_FOR_CHANGE =
+  /\b(fix|fixed|broken|bug|error|crash|solve|correct|wrong|write|create|add|implement|refactor|rewrite|rename|change|update|improve|optimi[sz]e|faster|help me)\b/i;
 
 const MAX_FIELD_CHARS = 60_000;
 
@@ -164,7 +179,7 @@ The assistant answered out loud: "${req.answer}"${format}`;
 }
 
 export async function generateSuggestion(apiKey: string, req: SuggestRequest): Promise<Suggestion | null> {
-  if (!PROPOSES_CHANGE.test(req.answer)) return null;
+  if (!PROPOSES_CHANGE.test(req.answer) && !ASKS_FOR_CHANGE.test(req.question)) return null;
   const parsed = await gatewayJson<CodeCardJson>(
     apiKey,
     SUGGEST_MODEL,

@@ -340,6 +340,22 @@ test('no answer is asked for while AssemblyAI is still hearing the question', as
   }
 });
 
+test('once the question is delivered and transcribed, the nudge comes quickly', async () => {
+  const h = await connect();
+  try {
+    h.client.startActivity();
+    await h.serverSendsOnly({ type: 'input.speech.started' });
+    h.client.endActivity();
+    await h.serverSendsOnly({ type: 'input.speech.stopped' }, { type: 'transcript.user', text: 'Why does it crash?' });
+    // AssemblyAI has the whole question, so waiting the full fallback is silence
+    // the user sits through for nothing.
+    await sleep(700);
+    assert.equal(h.sent.filter((type) => type === 'reply.create').length, 1);
+  } finally {
+    h.close();
+  }
+});
+
 test('an answer starting right after the transcript needs no nudge', async () => {
   const h = await connect();
   try {

@@ -20,6 +20,15 @@ const RESUME_WINDOW_MS = 25_000;
 const RELEASE_SILENCE_MS = 320;
 /** If no reply has started this long after release, ask for one explicitly. */
 const REPLY_FALLBACK_MS = 1200;
+/**
+ * The shorter wait used once the whole question is both delivered and
+ * transcribed. Measured against the live Voice Agent, a reply.create takes
+ * ~950 ms to bring back its first audio, so every millisecond spent waiting to
+ * send it is a millisecond of silence the user sits through. At that point
+ * AssemblyAI has everything it needs: it either starts answering within a
+ * moment or it never will, and an answer that does start clears this timer.
+ */
+const REPLY_NUDGE_MS = 400;
 /** If AssemblyAI still hasn't finished hearing the question this long after release, ask anyway. */
 const HEARING_TIMEOUT_MS = 4000;
 /**
@@ -458,14 +467,20 @@ export class AgentClient {
     if ((this.replyActive && !this.discarding) || this.replyCompletedThisQuestion) return;
     const hearing = this.userSpeaking || !this.heardThisQuestion;
     this.nudgeAfterTranscript = hearing;
+    // Nothing of the question is still on its way: every audio frame including
+    // the closing silence has gone out (only the release marker being handled
+    // right now may remain), and the transcript has arrived. Question audio
+    // still queued at release is what the long wait protects against, and there
+    // is none here.
+    const settled = !hearing && this.awaitingAnswer && !this.queue.some((item) => item.kind !== 'released');
     this.replyFallback = setTimeout(
       () => {
         this.nudgeAfterTranscript = false;
-        this.log.info('No reply yet after release; asking for one');
+        this.log.info(`No reply yet after release; asking for one (waited ${settled ? REPLY_NUDGE_MS : REPLY_FALLBACK_MS} ms)`);
         this.askedForReply = true;
         this.send({ type: 'reply.create' });
       },
-      hearing ? HEARING_TIMEOUT_MS : REPLY_FALLBACK_MS,
+      hearing ? HEARING_TIMEOUT_MS : settled ? REPLY_NUDGE_MS : REPLY_FALLBACK_MS,
     );
   }
 
