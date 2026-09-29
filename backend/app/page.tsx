@@ -18,7 +18,7 @@ const STEPS = [
   },
   {
     title: 'Listen and look',
-    body: 'The answer comes back in plain language. The file it is about opens, and each line lights up as it is mentioned.',
+    body: 'The answer comes back in plain language. The file it is about opens, and each line lights up as it is mentioned. Ask to be taken somewhere instead — "open the LinkedList file" — and it comes up with your cursor in it.',
   },
   {
     title: 'Apply, or ask again',
@@ -40,6 +40,10 @@ const FEATURES = [
     body: 'Ask "where do I change the heading?" while looking at index.html and it finds the rule in style.css, opens that file and highlights the line. In our own testing on a small web app, 9 of 9 questions landed on the right file and line.',
   },
   {
+    title: 'It takes you to the file',
+    body: 'Say "open the globals.css file" and it comes up with your cursor in it, while EchoCode is still answering. Speech loses a letter more often than not, so "global.css" finds it too. A name that could mean two files opens neither and EchoCode asks which you meant: moving your cursor into the wrong file is worse than not moving it.',
+  },
+  {
     title: 'It points while it talks',
     body: 'Lines light up in your editor at the moment they are spoken, so you never have to work out which part of your screen the answer means.',
   },
@@ -57,6 +61,7 @@ const FREE_FEATURES = [
   '15 minutes of voice a month, about 20 questions*',
   'Ask out loud and hear the answer',
   'Answers that look across your project, not just the open file',
+  'Ask for any file by name and it opens',
   'Lines light up as they are mentioned',
   'A conversation you can scroll back through',
   'One-click code cards',

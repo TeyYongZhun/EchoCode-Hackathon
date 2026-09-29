@@ -19,7 +19,7 @@ EchoCode is a VS Code extension that lets you ask about your code out loud and h
 ## In 30 seconds
 
 - **The problem:** asking an AI about your code means typing long prompts and copy-pasting code into a chat window. Students skip it and paste answers they don't understand.
-- **Our solution:** hold one key and ask out loud. EchoCode reads the file you're in *and the rest of your project*, answers by voice, opens the file it is talking about and lights up the lines, then hands you the fix as one-click code.
+- **Our solution:** hold one key and ask out loud. EchoCode reads the file you're in *and the rest of your project*, answers by voice, opens the file it is talking about and lights up the lines, then hands you the fix as one-click code. Ask it to *"open the LinkedList file"* and it takes you there.
 - **Built on AssemblyAI:** the **Voice Agent API** runs the spoken conversation, and the **LLM Gateway** writes the code for suggested fixes.
 - **Who it's for:** computer science students and junior developers who learn best by talking a problem through.
 
@@ -36,7 +36,7 @@ It's so much effort that many people give up and paste in code they don't unders
 ## How it works
 
 1. **Wake it.** Press Ctrl+Alt+Space once. EchoCode says hello and stays ready.
-2. **Hold the same key and ask** out loud: *"Why is this so slow?"* or *"Where do I change the font?"* Let go to send. Select some code first if your question is about a particular part.
+2. **Hold the same key and ask** out loud: *"Why is this so slow?"*, *"Where do I change the font?"* or *"open the LinkedList file"*. Let go to send. Select some code first if your question is about a particular part.
 3. **Listen and apply.** A senior-engineer voice explains, the lines it mentions light up — opening another file when the answer lives there — and a suggested fix appears with a **Replace lines** button.
 
 EchoCode already knows which file you're in, where your cursor is, what you selected, any compiler errors, and the other files in your project, so you never copy-paste anything.
@@ -48,6 +48,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 | 🎙️ **Talk, don't type** | Hold a key and ask, like asking a colleague. Nothing is recorded until you press it. |
 | 📄 **Knows your code** | Your file, selection and errors go with every question automatically. |
 | 📁 **Knows your project** | The other files go too, so "where do I change the font?" finds `style.css`, opens it and lights up the line. |
+| 🧭 **Takes you there** | Ask it to *"open the globals.css file"* and the file comes up with your cursor in it. A name heard slightly wrong — "global.css" — still finds it. |
 | 🔦 **Points at the code** | Lines light up at the moment they're mentioned in the answer. |
 | ⚡ **One-click fixes** | Suggested code appears as a card: **Replace lines** or **Insert at Cursor**. |
 | ✋ **Interrupt any time** | Press the key mid-answer to ask something else. |
@@ -89,7 +90,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 
 You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the right panel; older versions show it in the Explorer) and a microphone. Headphones help. No API key is needed.
 
-1. **Install:** download `echocode-0.1.3.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode-Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
+1. **Install:** download `echocode-0.1.4.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode-Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
 2. **Open the demo:** download this repository and open its `demo/` folder in VS Code.
 3. **Check your mic:** press **Ctrl+Shift+P** and run **EchoCode: Test Microphone**.
 4. **Wake EchoCode:** press **Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS) once. It says hello, and stays ready.
@@ -100,6 +101,8 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 | `GenericStack.java` | the `push` method | *"Walk me through this method. Why does it double the array?"* |
 | `DuplicateFinder.java` | the `findDuplicates` method | *"Why is this so slow with a big list? How do I fix it?"* Then click **Replace lines** on the code card. |
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
+
+You can also just ask to be taken somewhere, without asking about the code: *"open the duplicate finder"* or *"show me LinkedList.java"* brings the file up with your cursor in it. If the name could mean two files, EchoCode asks which one you meant rather than guessing.
 
 The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. The panel opens on a **Get started** card covering the microphone, the hotkey (including the default one, in case you've rebound it), ⚙ Settings and ■ Stop; your first question pushes it out of the way, and scrolling back to the top of the conversation brings it back. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
 
@@ -197,7 +200,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | `extension/` | `npm test` | 81 unit tests: editor and project context, line and file references, conversation memory, where code is inserted, hotkey handling, the voice client, audio and resampling |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the window to pick up changes) |
-| `extension/` | `npm run package` | Builds `echocode-0.1.3.vsix` with the microphone library for every platform |
+| `extension/` | `npm run package` | Builds `echocode-0.1.4.vsix` with the microphone library for every platform |
 | `backend/` | `npm run dev` | Runs the backend at http://localhost:3000 |
 | `backend/` | `npm run smoke` | Asks the Voice Agent one question through the backend and reports the reply and latency |
 | `backend/` | `npm run build` | Production build of the backend and landing page |

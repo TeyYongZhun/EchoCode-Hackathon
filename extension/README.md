@@ -1,6 +1,6 @@
 # EchoCode
 
-**The voice-first AI pair programmer.** Hold a key and ask out loud. EchoCode reads the file you are looking at and the rest of your project, talks you through it, opens the file it is talking about and lights up the lines, and hands you ready-to-insert code when it suggests a fix.
+**The voice-first AI pair programmer.** Hold a key and ask out loud. EchoCode reads the file you are looking at and the rest of your project, talks you through it, opens the file it is talking about and lights up the lines, takes you to any file you ask for by name, and hands you ready-to-insert code when it suggests a fix.
 
 Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gateway for code cards.
 
@@ -10,7 +10,7 @@ The panel itself opens on a **Get started** card with these steps and the defaul
 
 1. Press **`Ctrl+Alt+Space`** (`Ctrl+Shift+Space` on macOS) once to wake EchoCode. It says hello and stays ready.
 2. **Hold the same key**, ask your question and let go. You can also tap the key or click **EchoCode** in the status bar, speak, and tap again. Select some code first if your question is about a particular part.
-3. Listen. The answer appears in the conversation in the **EchoCode** tab of the right panel, and the lines it mentions light up in your editor. If the answer is in another file, that file opens.
+3. Listen. The answer appears in the conversation in the **EchoCode** tab of the right panel, and the lines it mentions light up in your editor. If the answer is in another file, that file opens. Ask for a file by name — *"open the LinkedList file"* — and it opens with your cursor in it.
 4. When it proposes a change, use **Replace lines** or **Insert at Cursor** on the code card in the conversation.
 
 Press the key while EchoCode is talking to interrupt it with a new question.
@@ -23,6 +23,7 @@ Click **⚙** in the panel to see your plan and minutes left this month, upgrade
 
 - **About the code in front of you:** "why does this crash?", "walk me through this method".
 - **About the rest of the project:** "where do I change the font?", "how does clicking a task mark it done?" EchoCode reads the other source files in the open folder, so it can point at a file you do not have open.
+- **To take you to a file:** "open the LinkedList file", "show me globals.css", "take me to the duplicate finder". The file opens with your cursor in it. Names come through speech imprecisely, so one a letter or two off still finds the file; a name that could mean two files opens neither, and EchoCode asks which you meant.
 
 ## Commands
 
