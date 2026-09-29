@@ -91,8 +91,6 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 - **Margins:** 83% on a cohort deal, 65% on a campus deal. Voice is a genuine cost of goods, so this is a 60–83% business rather than the 90% of pure software, and allowances are capped in code.
 - **Cost roadmap:** idle session time is the cost driver, not question volume. Tiering the idle timeout by plan — short on Free, 3 minutes on Pro — cuts unit cost by up to 58% and turns responsiveness into part of what a paid plan buys.
 
-The full model, deal-level P&L and three-year projection are in [docs/EchoCode-Revenue-Plan.pdf](docs/EchoCode-Revenue-Plan.pdf). Prices are modelled hypotheses; the cost base is verified against live AssemblyAI pricing.
-
 ## Try it
 
 You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the right panel; older versions show it in the Explorer) and a microphone. Headphones help. No API key is needed.
