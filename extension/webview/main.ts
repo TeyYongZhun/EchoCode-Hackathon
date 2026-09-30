@@ -104,7 +104,7 @@ app.innerHTML = `
       <h3>Plan</h3>
       <div class="plan-row">
         <span class="plan-name"></span>
-        <button class="upgrade" hidden>Upgrade to Pro</button>
+        <button class="upgrade" hidden>See plans</button>
       </div>
     </div>
     <div class="settings-block">

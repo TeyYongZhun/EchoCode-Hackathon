@@ -6,7 +6,6 @@ import {
   getUsage,
   isOverLimit,
   isValidInstallId,
-  PRO_SECONDS_PER_MONTH,
   type Usage,
 } from '@/lib/usage';
 
@@ -50,11 +49,8 @@ export async function POST(request: Request): Promise<Response> {
     if (usage && isOverLimit(usage)) {
       const minutes = Math.round(usage.limitSeconds / 60);
       const used = `You've used your ${minutes} ${usage.plan === 'pro' ? 'Pro' : 'free'} minute${minutes === 1 ? '' : 's'} of EchoCode this month.`;
-      const next =
-        usage.plan === 'pro'
-          ? 'Top up to keep talking, or wait for next month.'
-          : `Upgrade to Pro for ${Math.round(PRO_SECONDS_PER_MONTH / 60)} minutes a month.`;
-      return Response.json({ error: `${used} ${next}`, usage }, { status: 402 });
+      // Nothing more can be bought yet, so say when the allowance comes back rather than offer an upgrade.
+      return Response.json({ error: `${used} They reset on the 1st.`, usage }, { status: 402 });
     }
   } catch (err) {
     // Metering must never take the product down; let the session through.

@@ -84,8 +84,8 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 |---|---|---|---|
 | **Free** | $0 | 10 minutes of voice a month, about 13 questions | **Available today** |
 | **Pro** | $20/month, or $192/year | 60 questions a month, about 45 minutes of voice | Not on sale yet |
-| **Cohort** | $25 per learner, once, for a 12-week cohort | Everything in Pro for every learner, minutes pooled across the cohort | Not on sale yet |
-| **Campus** | $36 per seat, per academic year | Everything in Pro for every student, minutes pooled across the department | Not on sale yet |
+| **Cohort** | $25 per learner, once, for a 12-week cohort | A larger voice allowance for every learner, pooled across the cohort | Not on sale yet |
+| **Campus** | $36 per seat, per academic year | A larger voice allowance for every student, pooled across the department | Not on sale yet |
 
 - **Unit economics:** the Voice Agent API bills **per second of session duration** at $0.075 a minute — not per minute of speech. A question is about 45 seconds of talking, but today's 3-minute idle timeout holds the session open for about 3 minutes, so it costs roughly **$0.22**. At a 60-second idle timeout it costs about **$0.13**. Code cards add $0.0014 each through the LLM Gateway, under 1% of cost of goods sold.
 - **Margins:** our year-one model assumes the 60-second idle timeout planned for the next 90 days ($0.13 a question): **81%** on a cohort deal, **62%** on a campus deal, **61%** on Pro, and about **63%** overall. At today's 3-minute timeout the same model gives 68%, 34%, 33% and about 36%, which is why the timeout change comes first. Voice is a genuine cost of goods, so this is a 57–81% business rather than the 90% of pure software.

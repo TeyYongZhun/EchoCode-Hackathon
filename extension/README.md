@@ -17,7 +17,7 @@ Press the key while EchoCode is talking to interrupt it with a new question.
 
 VS Code keeps a panel muted until you click inside it, so after a restart the panel may say it can't be heard yet. Click anywhere in it once and the voice works for the rest of the session.
 
-Click **⚙** in the panel to see your plan and minutes left this month, upgrade to Pro, change the hotkey (it opens Keyboard Shortcuts at **EchoCode: Talk**), or change the panel background.
+Click **⚙** in the panel to see your plan and minutes left this month, open the plans page, change the hotkey (it opens Keyboard Shortcuts at **EchoCode: Talk**), or change the panel background.
 
 ## What EchoCode can answer
 

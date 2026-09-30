@@ -101,8 +101,8 @@ const PLANS: Plan[] = [
     featuresTitle: 'Everything in Free, plus:',
     features: [
       '60 questions a month, about 45 minutes of voice*',
-      'Top up whenever you need more',
-      'Follow-ups stay instant — the session is kept warm',
+      'Planned: top up when you need more',
+      'Planned: a longer warm session, so follow-ups stay instant',
       'Planned: a stronger model behind code cards',
     ],
   },
@@ -111,9 +111,9 @@ const PLANS: Plan[] = [
     tagline: 'For bootcamps and training programmes',
     price: '$25',
     note: 'Per learner, once, for a 12-week cohort.',
-    featuresTitle: 'Everything in Pro, for every learner:',
+    featuresTitle: 'Everything in Free, for every learner:',
     features: [
-      'Minutes pooled across the whole cohort',
+      'A larger voice allowance, pooled across the whole cohort',
       'No sign-up for learners — one invoice, everyone in',
       'Planned: progress view of where a cohort gets stuck',
       'Planned: overage by the minute, never a hard stop',
@@ -124,9 +124,9 @@ const PLANS: Plan[] = [
     tagline: 'For university departments',
     price: '$36',
     note: 'Per seat, per academic year.',
-    featuresTitle: 'Everything in Pro, for every student:',
+    featuresTitle: 'Everything in Free, for every student:',
     features: [
-      'Minutes pooled across the department',
+      'A larger voice allowance, pooled across the department',
       'Priced per enrolled seat, billed once a year',
       'Planned: instructor view of the concepts a class keeps missing',
       'Planned: shared allowance across courses',
@@ -321,8 +321,8 @@ export default function Home() {
           <div className="wrap" data-reveal>
             <h2>Pricing</h2>
             <p className="section-lede">
-              Free forever for individuals. Bootcamps and universities pay for the students they teach, so nobody
-              learning to read code ever hits a paywall on their own.
+              Free forever for students, with 10 minutes of voice every month. Bootcamps and universities pay for a
+              larger allowance for the students they teach.
             </p>
             <div className="pricing">
               {PLANS.map((plan) => (
