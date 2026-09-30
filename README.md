@@ -10,6 +10,17 @@ EchoCode is a VS Code extension that lets you ask about your code out loud and h
 
 **[Landing page](https://echo-code-hackathon.vercel.app)** · **[Download the extension](https://github.com/TeyYongZhun/EchoCode-Hackathon/releases/latest)** · **[Try it in 2 minutes](#try-it)**
 
+## Tech stack
+
+| Part | Built with |
+|---|---|
+| Voice conversation | AssemblyAI Voice Agent API |
+| Code suggestions | AssemblyAI LLM Gateway |
+| VS Code extension | TypeScript, VS Code Extension API, esbuild |
+| Microphone | PvRecorder (Windows, macOS, Linux) |
+| Backend and landing page | Next.js on Vercel |
+| Usage metering | Upstash Redis |
+
 ## The problem
 
 Many students now "vibe code": they tell an AI *"please fix the code"* and paste in whatever comes back, without knowing what was wrong or why the fix works. Asking for a real explanation takes more effort, because it means typing a long prompt, copy-pasting code into a chat window, and matching the answer back to the right lines. So they skip the understanding and ship code they cannot explain. EchoCode makes asking *why* as easy as talking, so understanding the code takes less effort than copying it.
@@ -83,17 +94,6 @@ Click **⚙** in the panel to see your minutes left, change the hotkey or change
 - **Cost per question:** about $0.22 today. The Voice Agent API bills per second a session is open ($0.075 a minute), so idle time is the cost driver.
 - **Next step:** cutting the idle timeout from 3 minutes to 60 seconds brings it to about $0.13 and lifts the modelled overall margin from about 36% to about 63%.
 - **Details:** [revenue plan](docs/EchoCode-Revenue-Plan.pdf).
-
-## Tech stack
-
-| Part | Built with |
-|---|---|
-| Voice conversation | AssemblyAI Voice Agent API |
-| Code suggestions | AssemblyAI LLM Gateway |
-| VS Code extension | TypeScript, VS Code Extension API, esbuild |
-| Microphone | PvRecorder (Windows, macOS, Linux) |
-| Backend and landing page | Next.js on Vercel |
-| Usage metering | Upstash Redis |
 
 ## Run from source
 
@@ -200,8 +200,28 @@ npm test
 
 ```
 EchoCode-Hackathon/
-├── extension/   the VS Code extension (src/, webview/, test/)
-├── backend/     Next.js backend and landing page on Vercel (app/api/, lib/)
-├── demo/        Java files and a small web app for the live demo
-└── docs/        architecture diagram, revenue plan, test report
+├── extension/                      the VS Code extension
+│   ├── src/
+│   │   ├── extension.ts            entry point: registers commands, hotkey and panel
+│   │   ├── SessionController.ts    runs each voice question from key press to answer
+│   │   ├── audio/                  microphone recording, resampling, silence detection
+│   │   ├── context/                editor and project context, line and file references
+│   │   ├── voice/                  AssemblyAI Voice Agent client and backend API calls
+│   │   └── ui/                     panel, line highlights, code cards, status bar
+│   ├── webview/                    panel UI, robot animation and audio playback
+│   ├── scripts/                    launcher behind `npm run dev`
+│   └── test/                       93 unit tests
+├── backend/                        Next.js backend and landing page on Vercel
+│   ├── app/
+│   │   ├── api/token/              issues single-use Voice Agent tokens
+│   │   ├── api/suggest/            writes code cards through the LLM Gateway
+│   │   ├── api/usage/              reports voice minutes used per plan
+│   │   ├── api/health/             status check
+│   │   └── page.tsx                landing page
+│   ├── lib/                        agent prompt and settings, AssemblyAI calls, usage metering
+│   └── scripts/                    live smoke test behind `npm run smoke`
+├── demo/                           sample code for the live demo
+│   ├── *.java                      three Java files, each with a bug or slow method to ask about
+│   └── web/                        small to-do app for cross-file questions
+└── docs/                           architecture diagram, revenue plan, test report
 ```
