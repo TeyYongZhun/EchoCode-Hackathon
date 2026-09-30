@@ -4,6 +4,14 @@
 
 Powered by AssemblyAI: the Voice Agent API for the conversation and the LLM Gateway for code cards.
 
+**Current version: 0.1.4.** See the [changelog](CHANGELOG.md) for what's new.
+
+## Requirements
+
+- Desktop VS Code 1.95 or later. On 1.106 or later EchoCode sits in the right panel; older versions show it in the Explorer.
+- A microphone. Headphones help.
+- No API key is needed.
+
 ## How to use it
 
 The panel itself opens on a **Get started** card with these steps and the default hotkey; your first question pushes it up out of the way, and scrolling to the top of the conversation brings it back.
@@ -50,7 +58,7 @@ Nothing is recorded until you press the hotkey. Your question audio goes to Asse
 
 ## Plans
 
-Free includes 10 minutes of voice a month, about 13 questions, and is available today. Pro ($20/month, or $192/year) adds 60 questions a month. Cohort ($25 per learner, once, for a 12-week cohort) and Campus ($36 per seat, per academic year) pool minutes across a bootcamp intake or a university department. Pro, Cohort and Campus are not on sale yet.
+Free includes 10 minutes of voice a month, about 13 questions, and is available today. Pro ($20/month, or $192/year) includes 60 questions a month, about 45 minutes of voice. Cohort ($25 per learner, once, for a 12-week cohort) and Campus ($36 per seat, per academic year) pool minutes across a bootcamp intake or a university department. Pro, Cohort and Campus are not on sale yet.
 
 Minutes count the audio of your questions and EchoCode's answers; question counts are estimates. The panel's ⚙ Settings shows how many are left.
 
