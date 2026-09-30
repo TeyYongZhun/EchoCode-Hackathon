@@ -21,7 +21,7 @@ export class StatusBarRobot implements vscode.Disposable {
   constructor() {
     this.item.name = 'EchoCode';
     this.item.command = 'echocode.talk';
-    this.update('idle');
+    this.update('asleep');
     this.item.show();
   }
 

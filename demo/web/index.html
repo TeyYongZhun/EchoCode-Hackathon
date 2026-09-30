@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study Tasks</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <h1 class="heading">Study Tasks</h1>
+    <p class="counter"><span id="remaining">0</span> tasks left</p>
+
+    <form id="new-task" class="new-task">
+      <input id="task-title" type="text" placeholder="Add a task, e.g. revise linked lists" autocomplete="off">
+      <button type="submit" class="add-button">Add</button>
+    </form>
+
+    <ul id="task-list" class="task-list"></ul>
+
+    <button id="clear-done" class="clear-button">Clear finished</button>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

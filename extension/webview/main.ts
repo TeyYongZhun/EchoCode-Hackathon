@@ -62,8 +62,8 @@ const ASK_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const GUIDE_STEPS: { icon: string; title: string; body: string }[] = [
   {
     icon: MIC_ICON,
-    title: 'Let EchoCode hear you',
-    body: 'VS Code asks for the microphone once, the first time you wake it. Allow it — that permission is the whole conversation.',
+    title: 'Click here once, then check your mic',
+    body: 'VS Code keeps a panel silent until you click inside it, so click anywhere here after each reload. If EchoCode can\'t hear you, run "EchoCode: Test Microphone" from the Command Palette.',
   },
   {
     icon: ASK_ICON,
@@ -238,7 +238,7 @@ function setBubble(words: string, kind: 'hint' | 'alert' | 'error' = 'hint'): vo
 
 function showHint(): void {
   // Eyes go to the robot, so the one thing standing between them and hearing it belongs here.
-  if (player.blocked) setBubble(`press ${hotkey} to awake the robot`, 'alert');
+  if (player.blocked) setBubble('Click anywhere here once so you can hear EchoCode.', 'alert');
   else if (state === 'asleep') setBubble(`Press ${hotkey} to wake EchoCode.`, 'hint');
   else setBubble(`Hold ${hotkey} and ask about your code.`, 'hint');
 }

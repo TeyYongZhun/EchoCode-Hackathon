@@ -48,7 +48,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 | 🎙️ **Talk, don't type** | Hold a key and ask, like asking a colleague. Nothing is recorded until you press it. |
 | 📄 **Knows your code** | Your file, selection and errors go with every question automatically. |
 | 📁 **Knows your project** | The other files go too, so "where do I change the font?" finds `style.css`, opens it and lights up the line. |
-| 🧭 **Takes you there** | Ask it to *"open the globals.css file"* and the file comes up with your cursor in it. A name heard slightly wrong — "global.css" — still finds it. |
+| 🧭 **Takes you there** | Ask it to *"open the style.css file"* and the file comes up with your cursor in it. A name heard slightly wrong — "styles.css" — still finds it. |
 | 🔦 **Points at the code** | Lines light up at the moment they're mentioned in the answer. |
 | ⚡ **One-click fixes** | Suggested code appears as a card: **Replace lines** or **Insert at Cursor**. |
 | ✋ **Interrupt any time** | Press the key mid-answer to ask something else. |
@@ -98,7 +98,7 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 1. **Install:** download `echocode-0.1.4.vsix` from the [latest release](https://github.com/TeyYongZhun/EchoCode-Hackathon/releases/latest). In VS Code, open the Extensions view, click **⋯ → Install from VSIX…** and pick the file. Don't double-click the file: on Windows that opens Visual Studio's installer instead.
 2. **Open the demo:** download this repository and open its `demo/` folder in VS Code.
 3. **Check your mic:** press **Ctrl+Shift+P** and run **EchoCode: Test Microphone**.
-4. **Wake EchoCode:** press **Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS) once. It says hello, and stays ready.
+4. **Wake EchoCode:** click once anywhere inside the **EchoCode** panel (VS Code keeps a panel silent until you do), then press **Ctrl+Alt+Space** (**Ctrl+Shift+Space** on macOS) once. It says hello, and stays ready.
 5. **Ask:** open a demo file, select the code below, click inside the editor, then **hold** the same key, ask, and let go. You can also click **🤖 EchoCode** in the status bar instead.
 
 | Demo file | Select | Ask |
@@ -107,9 +107,17 @@ You need desktop VS Code 1.95 or later (1.106 or later to get EchoCode in the ri
 | `DuplicateFinder.java` | the `findDuplicates` method | *"Why is this so slow with a big list? How do I fix it?"* Then click **Replace lines** on the code card. |
 | `LinkedList.java` | the `removeLast` method | *"Why does this crash?"* |
 
-You can also just ask to be taken somewhere, without asking about the code: *"open the duplicate finder"* or *"show me LinkedList.java"* brings the file up with your cursor in it. If the name could mean two files, EchoCode asks which one you meant rather than guessing.
+**Ask about a file you don't have open.** `demo/web/` is a small to-do app in three files. Open `web/index.html`, select nothing, and ask:
 
-The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. The panel opens on a **Get started** card covering the microphone, the hotkey (including the default one, in case you've rebound it), ⚙ Settings and ■ Stop; your first question pushes it out of the way, and scrolling back to the top of the conversation brings it back. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
+| Ask | What happens |
+|---|---|
+| *"Where do I change the font?"* | `style.css` opens and the `font-family` line lights up. |
+| *"How does clicking a task mark it done?"* | `app.js` opens at the click handler. |
+| *"Why doesn't the counter update when I delete a task?"* | `app.js` opens at `deleteTask`, which has the bug. |
+
+You can also just ask to be taken somewhere, without asking about the code: *"open the duplicate finder"*, *"show me LinkedList.java"* or *"open the stylesheet"* brings the file up with your cursor in it. If the name could mean two files, EchoCode asks which one you meant rather than guessing.
+
+The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** shows or hides it), next to the conversation and code cards. The panel opens on a **Get started** card covering sound and the microphone, the hotkey (including the default one, in case you've rebound it), ⚙ Settings and ■ Stop; your first question pushes it out of the way, and scrolling back to the top of the conversation brings it back. Click **⚙** there to see your plan and minutes left this month, change the hotkey, or change the panel background.
 
 ## Tech stack
 
@@ -183,8 +191,8 @@ EchoCode-Hackathon/
 │   ├── app/api/health/           status check
 │   ├── app/page.tsx              landing page
 │   └── lib/                      prompt, AssemblyAI, usage
-├── demo/                         Java files for the live demo
-└── docs/                         architecture diagram
+├── demo/                         Java files and a small web app (web/) for the live demo
+└── docs/                         architecture diagram, revenue plan
 ```
 
 ## Deployment
