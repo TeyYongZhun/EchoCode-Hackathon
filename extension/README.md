@@ -46,7 +46,7 @@ Click **⚙** in the panel to see your plan and minutes left this month, open th
 
 ## Privacy
 
-Nothing is recorded until you press the hotkey. Your question audio goes to AssemblyAI to be answered, along with the file you're looking at and the other source files in the open folder, so EchoCode can answer about code you don't have open. Folders like `node_modules`, `.git` and build output are never sent. No API key is stored in the extension: the backend hands out short-lived, single-use session tokens.
+Nothing is recorded until you press the hotkey. Your question audio goes to AssemblyAI to be answered, along with the file you're looking at and the other source files in the open folder, so EchoCode can answer about code you don't have open. Folders like `node_modules`, `.git` and build output are never sent, and neither are files git ignores or files named like a secret (`credentials.json`, `.env`, `appsettings.json`, key files). The file you have open is always sent, so don't ask about a file of secrets. No API key is stored in the extension: the backend hands out short-lived, single-use session tokens. The backend keeps an anonymous install id, the seconds of voice you've used, and request counts per IP address for up to a day, for rate limiting.
 
 ## Plans
 

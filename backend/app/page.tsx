@@ -157,8 +157,9 @@ const PRIVACY = [
   'Your microphone is off until you hold the key',
   'No AssemblyAI key is shipped inside the extension',
   'node_modules, .git, build output and lock files are never sent',
+  'Files git ignores, and files named like a secret (credentials.json, .env, key files), stay on your machine unless it is the file you have open',
   'Your question and your code go to AssemblyAI to be answered. The code-card request passes through our Vercel server on the way there',
-  'All we keep is a random install id and the minutes you have used, to count your free minutes',
+  'All we keep is an anonymous install id, the minutes you have used, and request counts per IP address for up to a day, to count your free minutes and limit abuse',
 ];
 
 const FACTS = [

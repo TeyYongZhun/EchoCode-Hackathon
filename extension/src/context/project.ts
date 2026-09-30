@@ -21,6 +21,28 @@ const MAX_FILE_CHARS = 12_000;
 /** Long lines (minified code, data blobs) are cut rather than dropped. */
 const MAX_LINE_CHARS = 400;
 
+/**
+ * File names that usually hold secrets rather than code: credentials.json,
+ * client_secret_123.json, appsettings.Development.json, .env files, key files.
+ * The word has to stand alone in the name, so SecretSanta.java and
+ * passwordField.ts are still code.
+ */
+const SENSITIVE_NAMES = [
+  /(^|[._-])(secrets?|credentials?|passwords?|passwd|api[._-]?keys?|private[._-]?keys?)([._-]|$)/,
+  /^\.env([._-]|$)/,
+  /^appsettings(\..+)?\.json$/,
+  /^service[._-]?account.*\.json$/,
+  /^google-services\.json$/,
+  /adminsdk.*\.json$/,
+  /\.(pem|key|p12|pfx|keystore|jks)$/,
+];
+
+/** True for a file that should never leave the machine, whatever the question. */
+export function isSensitivePath(path: string): boolean {
+  const name = path.slice(path.lastIndexOf('/') + 1).toLowerCase();
+  return SENSITIVE_NAMES.some((pattern) => pattern.test(name));
+}
+
 export interface ProjectSelection {
   /** Sent with their contents. */
   full: ProjectFile[];

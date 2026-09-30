@@ -70,7 +70,7 @@ EchoCode already knows which file you're in, where your cursor is, what you sele
 - **The key stays safe.** Only the backend on Vercel knows the AssemblyAI API key. The extension gets a single-use token that expires within two minutes.
 - **The voice is fast.** Audio goes straight from VS Code to AssemblyAI, with no server in between.
 - **Costs stay low.** Unused sessions close after 3 minutes, and each user's voice minutes are counted in Upstash Redis against their plan. Every session is capped at 15 minutes, and session tokens are rate-limited per install and per IP with a daily ceiling across all users, so the worst day's spend is bounded.
-- **What leaves your machine.** Your audio and the editor/project context go to AssemblyAI to be answered. The code-card request (context, question, spoken answer) is posted to our Vercel backend, which forwards it to the LLM Gateway; it isn't stored. Redis only ever holds a random install id and seconds of voice used.
+- **What leaves your machine.** Your audio and the editor/project context go to AssemblyAI to be answered. The code-card request (context, question, spoken answer) is posted to our Vercel backend, which forwards it to the LLM Gateway; it isn't stored. Of the other project files, anything git ignores and anything named like a secret (`credentials.json`, `.env`, `appsettings.json`, key files) stays on your machine; the file you have open is always sent. Redis holds an anonymous install id (a hash, not your name or machine id), seconds of voice used, and request counts per IP address, kept for up to a day, for rate limiting.
 
 ## Business model
 

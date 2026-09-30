@@ -1,6 +1,8 @@
 import * as fs from 'node:fs';
+import * as nodePath from 'node:path';
 import * as vscode from 'vscode';
-import { formatProject, selectProjectFiles, type ProjectFile } from './project';
+import { gitIgnored } from './gitIgnore';
+import { formatProject, isSensitivePath, selectProjectFiles, type ProjectFile } from './project';
 
 /**
  * Keeps track of the source files in the open folder. Finding them is async, so
@@ -33,6 +35,10 @@ export class WorkspaceIndex implements vscode.Disposable {
       vscode.workspace.onDidDeleteFiles(onChange),
       vscode.workspace.onDidRenameFiles(onChange),
       vscode.workspace.onDidChangeWorkspaceFolders(onChange),
+      // A new ignore rule changes which files may be sent.
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        if (document.fileName.endsWith('.gitignore')) onChange();
+      }),
     ];
     void this.refresh();
   }
@@ -52,11 +58,42 @@ export class WorkspaceIndex implements vscode.Disposable {
   private async find(): Promise<void> {
     try {
       const found = await vscode.workspace.findFiles(SOURCE_GLOB, IGNORED, MAX_FILES);
-      this.paths = found.filter((uri) => !IGNORED_NAMES.test(uri.path.slice(uri.path.lastIndexOf('/') + 1)));
-      this.log.info(`Project has ${this.paths.length} source file${this.paths.length === 1 ? '' : 's'}`);
+      const named = found.filter(
+        (uri) => !IGNORED_NAMES.test(uri.path.slice(uri.path.lastIndexOf('/') + 1)) && !isSensitivePath(uri.path),
+      );
+      const ignored = await this.ignoredByGit(named);
+      this.paths = named.filter((uri) => !ignored.has(uri.toString()));
+      const held = found.length - this.paths.length;
+      this.log.info(
+        `Project has ${this.paths.length} source file${this.paths.length === 1 ? '' : 's'}` +
+          (held > 0 ? ` (${held} kept private: lock files, secret-looking names or git-ignored)` : ''),
+      );
     } catch (err) {
       this.log.warn(`Couldn't list the project's files: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** The files git ignores in their workspace folder, by URI. Empty where a folder isn't a git repository. */
+  private async ignoredByGit(uris: vscode.Uri[]): Promise<Set<string>> {
+    const byFolder = new Map<string, Map<string, vscode.Uri>>();
+    for (const uri of uris) {
+      const folder = vscode.workspace.getWorkspaceFolder(uri);
+      if (uri.scheme !== 'file' || folder?.uri.scheme !== 'file') continue;
+      const relative = nodePath.relative(folder.uri.fsPath, uri.fsPath).split(nodePath.sep).join('/');
+      const inFolder = byFolder.get(folder.uri.fsPath) ?? new Map<string, vscode.Uri>();
+      inFolder.set(relative, uri);
+      byFolder.set(folder.uri.fsPath, inFolder);
+    }
+    const ignored = new Set<string>();
+    await Promise.all(
+      [...byFolder].map(async ([cwd, files]) => {
+        for (const path of await gitIgnored(cwd, [...files.keys()])) {
+          const uri = files.get(path);
+          if (uri) ignored.add(uri.toString());
+        }
+      }),
+    );
+    return ignored;
   }
 
   /**
