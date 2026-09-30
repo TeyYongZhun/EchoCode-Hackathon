@@ -4,8 +4,11 @@
  * everything is allowed, so local development needs no database.
  *
  * Usage is reported by the extension after each answer (seconds of question
- * and answer audio). That's trusting the client, which is fine for a free
- * tier; paid enforcement would meter on the server.
+ * and answer audio). That's trusting the client, and an install id is only
+ * what the client says it is, so the monthly allowance alone can't bound
+ * cost. What does is below: every token opens a session of limited length
+ * (see the token route), and tokens are rate-limited per install and per IP
+ * and capped across everyone per day.
  */
 
 const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
@@ -14,9 +17,18 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_
 /** Voice allowance per month: 10 minutes (about 13 questions) on Free, 45 (about 60) on Pro. */
 export const FREE_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_FREE_SECONDS_PER_MONTH ?? 10 * 60);
 export const PRO_SECONDS_PER_MONTH = Number(process.env.ECHOCODE_PRO_SECONDS_PER_MONTH ?? 45 * 60);
-/** Session tokens one install may request per hour, to blunt abuse of the public endpoint. */
-const TOKENS_PER_HOUR_PER_INSTALL = 60;
-const TOKENS_PER_HOUR_PER_IP = 120;
+
+/** Most requests allowed in each window. A classroom shares one IP, so the IP limits stay generous. */
+const LIMITS = {
+  token: {
+    perInstallPerHour: 60,
+    perIpPerHour: 60,
+    perIpPerDay: Number(process.env.ECHOCODE_MAX_TOKENS_PER_IP_PER_DAY ?? 200),
+    /** The circuit breaker: however many installs or IPs ask, the day's voice spend is bounded. */
+    allPerDay: Number(process.env.ECHOCODE_MAX_TOKENS_PER_DAY ?? 400),
+  },
+  suggest: { perInstallPerHour: 120, perIpPerHour: 240, perIpPerDay: 1000, allPerDay: 4000 },
+};
 /** Longest usage a single report may add. */
 export const MAX_REPORT_SECONDS = 600;
 
@@ -88,19 +100,34 @@ export async function addUsage(installId: string, seconds: number): Promise<Usag
   return describe(installId, Number(used));
 }
 
-/** Counts a token request; false when this install or IP has asked too often this hour. */
-export async function allowTokenRequest(installId: string, ip: string): Promise<boolean> {
-  if (!isMeteringEnabled()) return true;
+/** 'rate' when this install or IP asked too often; 'capacity' when everyone together has used up today. */
+export type RequestVerdict = 'ok' | 'rate' | 'capacity';
+
+/** Increments each counter (setting its expiry) and returns the new values, in one round trip. */
+async function increment(counters: [key: string, ttl: number][]): Promise<number[]> {
+  const results = await redis(counters.flatMap(([key, ttl]) => [['INCR', key], ['EXPIRE', key, ttl]]));
+  return counters.map((_, i) => Number(results[i * 2]));
+}
+
+/**
+ * Counts a request to the token or suggest endpoint. The per-install and
+ * per-IP limits are checked first, and only a request that passes them counts
+ * toward the day's total: otherwise one IP hammering the endpoint could use up
+ * everyone's capacity.
+ */
+export async function allowRequest(kind: keyof typeof LIMITS, installId: string, ip: string): Promise<RequestVerdict> {
+  if (!isMeteringEnabled()) return 'ok';
+  const limits = LIMITS[kind];
   const hour = Math.floor(Date.now() / 3_600_000);
-  const installKey = `echocode:rate:install:${installId}:${hour}`;
-  const ipKey = `echocode:rate:ip:${ip}:${hour}`;
-  const [byInstall, , byIp] = await redis([
-    ['INCR', installKey],
-    ['EXPIRE', installKey, 3600],
-    ['INCR', ipKey],
-    ['EXPIRE', ipKey, 3600],
+  const day = Math.floor(Date.now() / 86_400_000);
+  const [byInstall, byIpHour, byIpDay] = await increment([
+    [`echocode:rate:${kind}:install:${installId}:h${hour}`, 3600],
+    [`echocode:rate:${kind}:ip:${ip}:h${hour}`, 3600],
+    [`echocode:rate:${kind}:ip:${ip}:d${day}`, 86_400],
   ]);
-  return Number(byInstall) <= TOKENS_PER_HOUR_PER_INSTALL && Number(byIp) <= TOKENS_PER_HOUR_PER_IP;
+  if (byInstall > limits.perInstallPerHour || byIpHour > limits.perIpPerHour || byIpDay > limits.perIpPerDay) return 'rate';
+  const [byAll] = await increment([[`echocode:rate:${kind}:all:d${day}`, 86_400]]);
+  return byAll > limits.allPerDay ? 'capacity' : 'ok';
 }
 
 /** The caller's IP as Vercel reports it. */

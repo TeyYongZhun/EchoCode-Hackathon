@@ -51,7 +51,12 @@ const PROPOSES_CHANGE =
 const ASKS_FOR_CHANGE =
   /\b(fix|fixed|broken|bug|error|crash|solve|correct|wrong|write|create|add|implement|refactor|rewrite|rename|change|update|improve|optimi[sz]e|faster|help me)\b/i;
 
-const MAX_FIELD_CHARS = 60_000;
+/**
+ * Longest each field may be. Context and selection are bounded by the
+ * extension's 45 KB context budget; transcripts are a spoken question and a
+ * two-to-four-sentence answer, so anything far longer isn't from EchoCode.
+ */
+const MAX_CHARS = { context: 60_000, selectedCode: 60_000, question: 4_000, answer: 8_000, languageId: 64 };
 
 export interface SuggestRequest {
   /** The [EDITOR CONTEXT] block the voice model saw. */
@@ -81,9 +86,12 @@ interface CodeCardJson {
 
 export function parseSuggestRequest(body: unknown): SuggestRequest | undefined {
   const b = body as Partial<Record<keyof SuggestRequest, unknown>> | undefined;
-  const text = (value: unknown) => typeof value === 'string' && value.length <= MAX_FIELD_CHARS;
-  if (!text(b?.context) || !text(b?.question) || !text(b?.answer) || !text(b?.languageId)) return undefined;
-  if (b?.selectedCode !== undefined && !text(b.selectedCode)) return undefined;
+  const text = (field: keyof typeof MAX_CHARS) => {
+    const value = b?.[field];
+    return typeof value === 'string' && value.length <= MAX_CHARS[field];
+  };
+  if (!text('context') || !text('question') || !text('answer') || !text('languageId')) return undefined;
+  if (b?.selectedCode !== undefined && !text('selectedCode')) return undefined;
   return b as SuggestRequest;
 }
 

@@ -1,7 +1,7 @@
 import { AGENT_WS_URL, GREETING, SESSION_CONFIG } from '@/lib/agentConfig';
 import { assemblyAiKey, createAgentToken } from '@/lib/assemblyai';
 import {
-  allowTokenRequest,
+  allowRequest,
   clientIp,
   getUsage,
   isOverLimit,
@@ -14,8 +14,12 @@ export const dynamic = 'force-dynamic';
 
 /** How long the extension has to open its session with the token. */
 const TOKEN_REDEEM_SECONDS = 120;
-/** Longest a single Voice Agent session may run. */
-const MAX_SESSION_SECONDS = 30 * 60;
+/**
+ * Longest a single Voice Agent session may run, which bounds what any one
+ * token can cost ($1.13 at $0.075 a minute). An unused session already closes
+ * after 3 minutes, and when this cap ends a busy one the extension reconnects.
+ */
+const MAX_SESSION_SECONDS = 15 * 60;
 
 /**
  * Mints a single-use AssemblyAI Voice Agent token for one EchoCode session.
@@ -35,8 +39,12 @@ export async function POST(request: Request): Promise<Response> {
 
   let usage: Usage | null = null;
   try {
-    if (!(await allowTokenRequest(installId, clientIp(request)))) {
-      return Response.json({ error: 'Too many sessions started this hour. Try again later.' }, { status: 429 });
+    const verdict = await allowRequest('token', installId, clientIp(request));
+    if (verdict === 'rate') {
+      return Response.json({ error: 'Too many sessions started from here recently. Try again later.' }, { status: 429 });
+    }
+    if (verdict === 'capacity') {
+      return Response.json({ error: "EchoCode has reached today's voice capacity. Please try again tomorrow." }, { status: 503 });
     }
     usage = await getUsage(installId);
     if (usage && isOverLimit(usage)) {

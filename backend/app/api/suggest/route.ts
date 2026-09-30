@@ -1,5 +1,6 @@
 import { assemblyAiKey } from '@/lib/assemblyai';
 import { generateSuggestion, parseSuggestRequest } from '@/lib/suggestion';
+import { allowRequest, clientIp, isValidInstallId } from '@/lib/usage';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,8 +17,17 @@ export async function POST(request: Request): Promise<Response> {
   const body: unknown = await request.json().catch(() => undefined);
   const installId = (body as { installId?: unknown } | undefined)?.installId;
   const req = parseSuggestRequest(body);
-  if (typeof installId !== 'string' || installId.length < 8 || installId.length > 128 || !req) {
+  if (!isValidInstallId(installId) || !req) {
     return Response.json({ error: 'Invalid suggestion request.' }, { status: 400 });
+  }
+
+  try {
+    if ((await allowRequest('suggest', installId, clientIp(request))) !== 'ok') {
+      return Response.json({ error: 'Too many code cards requested. Try again later.' }, { status: 429 });
+    }
+  } catch (err) {
+    // Metering must never take the product down; let the request through.
+    console.error('Rate limit check failed, allowing the suggestion:', err);
   }
 
   try {

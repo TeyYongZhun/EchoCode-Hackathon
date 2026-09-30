@@ -143,7 +143,7 @@ export class SessionController implements vscode.Disposable {
   private idleCloseTimer: NodeJS.Timeout | undefined;
   private lastActivityAt = 0;
   private lastWarmReconnectAt = 0;
-  /** Seconds of question and answer audio in this turn, for the usage meter. */
+  /** Seconds of question and answer audio not yet reported to the usage meter. */
   private voiceSeconds = 0;
   /** When this turn's reply started playing, to time highlights against its words. */
   private replyPlaysAt = 0;
@@ -236,6 +236,7 @@ export class SessionController implements vscode.Disposable {
     const hadActivity = this.activityOpen;
     const was = this.state;
     if (was === 'thinking' || was === 'speaking') this.rememberTurn(true);
+    this.flushUsage();
     this.endSessionIfAnswering();
     this.turnId++;
     this.clearTimers();
@@ -311,7 +312,7 @@ export class SessionController implements vscode.Disposable {
   private async wake(): Promise<void> {
     const turn = ++this.turnId;
     this.lastActivityAt = Date.now();
-    this.voiceSeconds = 0;
+    this.flushUsage();
     this.replyPlaysAt = 0;
     this.wordTimes = [];
     this.userText = '';
@@ -351,7 +352,8 @@ export class SessionController implements vscode.Disposable {
     const turn = ++this.turnId;
     this.lastActivityAt = Date.now();
     this.greeting = false;
-    this.voiceSeconds = 0;
+    // An answer interrupted by this question still used voice; count it before starting over.
+    this.flushUsage();
     this.replyPlaysAt = 0;
     this.wordTimes = [];
     clearTimeout(this.idleCloseTimer);
@@ -815,6 +817,17 @@ export class SessionController implements vscode.Disposable {
     }
   }
 
+  /**
+   * Reports the voice used since the last report, and starts counting afresh.
+   * Called wherever a turn ends — answered, interrupted, stopped or failed — so
+   * an answer cut short still counts for the audio that was heard.
+   */
+  private flushUsage(): void {
+    const seconds = this.voiceSeconds;
+    this.voiceSeconds = 0;
+    void this.reportTurnUsage(seconds);
+  }
+
   /** Tells the backend how much voice this answer used, and shows what's left this month. */
   private async reportTurnUsage(seconds: number): Promise<void> {
     if (seconds <= 0) return;
@@ -847,7 +860,7 @@ export class SessionController implements vscode.Disposable {
       // A greeting answers no question: no code card, and nothing to remember.
       this.greeting = false;
       this.log.info(`Greeting finished: "${this.modelText.trim()}"`);
-      void this.reportTurnUsage(this.voiceSeconds);
+      this.flushUsage();
       this.idleAfterPlayback(turn);
       return;
     }
@@ -856,7 +869,7 @@ export class SessionController implements vscode.Disposable {
     this.rememberTurn(false);
     this.scheduleHighlights(true);
     void this.requestCodeCard(turn);
-    void this.reportTurnUsage(this.voiceSeconds);
+    this.flushUsage();
     this.idleAfterPlayback(turn);
   }
 
@@ -887,6 +900,7 @@ export class SessionController implements vscode.Disposable {
 
   private fail(message: string): void {
     this.log.error(message);
+    this.flushUsage();
     this.turnId++;
     this.greeting = false;
     this.clearTimers();
