@@ -53,7 +53,7 @@ Hold one key and ask out loud. EchoCode already knows your file, selection, erro
 
 ## Architecture
 
-![EchoCode architecture: the VS Code extension captures editor and project context and streams mic audio to AssemblyAI's Voice Agent over one WebSocket session. Over HTTPS it calls the EchoCode backend on Vercel, which holds the API key, mints single-use session tokens, meters usage and calls the AssemblyAI LLM Gateway to write each code card.](docs/architecture.svg)
+![EchoCode architecture: the VS Code extension captures editor and project context and streams mic audio to AssemblyAI's Voice Agent over one WebSocket session. Over HTTPS it calls the EchoCode backend on Vercel, which holds the API key, mints single-use session tokens, meters usage and calls the AssemblyAI LLM Gateway to write each code card.](docs/EchoCode-Architecture-Full.png)
 
 - **The key stays safe.** Only the Vercel backend holds the AssemblyAI API key.
 - **The voice is fast.** Audio goes straight from VS Code to AssemblyAI, with no server in between.
