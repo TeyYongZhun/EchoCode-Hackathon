@@ -122,6 +122,45 @@ The answer plays in the **EchoCode** tab of the right panel (**Ctrl+Alt+B** show
 | Backend and landing page | Next.js on Vercel |
 | Usage metering | Upstash Redis |
 
+## Testing
+
+```bash
+cd extension
+npm install   # first time only
+npm test
+```
+
+**93 tests, all passing**, in about 25 seconds. They run on Node's built-in test runner (`node --test`) with TypeScript loaded directly — no Jest, no Mocha, no extra dependencies. You need Node 22.18 or later.
+
+![EchoCode test suite: 93 tests across 9 files, all passing](docs/EchoCode-Test-Report.png)
+
+| File | Tests | What it proves |
+|---|---|---|
+| `lineReferences` | 20 | line numbers pulled out of the spoken answer, and which file each belongs to |
+| `agentClient` | 18 | the Voice Agent protocol, end to end |
+| `audio` | 16 | 16 kHz to 24 kHz resampling, PCM timing, silence detection |
+| `declarations` | 9 | where a code card is inserted or replaced |
+| `formatContext` | 8 | the editor context block sent with every question |
+| `fileRequests` | 7 | spoken file names resolved to real files, ambiguity included |
+| `project` | 7 | the project index kept inside the 45 KB budget |
+| `hotkeyPresses` | 5 | press-and-hold rebuilt from repeated key events |
+| `conversation` | 3 | memory carried into a fresh session |
+
+**The voice client is tested without touching the live API.** `agentClient.test.ts` starts a local WebSocket server that replays AssemblyAI's own protocol — `session.ready`, `reply.started`, `reply.audio`, `transcript.user`, `reply.interrupted` — so the cases that are hardest to reproduce by hand are deterministic and cost nothing to run:
+
+- a reply that arrives while the hotkey is still held
+- an answer that comes back empty, and the real one that follows it
+- the user interrupting mid-answer
+- a dropped connection that resumes the same conversation
+
+That is also why the suite takes ~25 seconds rather than milliseconds: the timing tests wait in real time, because they are checking *when* something fires, not just what it returns.
+
+To run one file while you work on it:
+
+```bash
+node --import ./test/resolveTs.mjs --test test/agentClient.test.ts
+```
+
 ## Repository layout
 
 ```
@@ -202,7 +241,7 @@ To deploy on Vercel, import the repository, set **Root Directory** to `backend` 
 | Where | Command | What it does |
 |---|---|---|
 | `extension/` | `npm run dev` | Builds EchoCode and opens VS Code on `demo/` with it loaded |
-| `extension/` | `npm test` | 81 unit tests: editor and project context, line and file references, conversation memory, where code is inserted, hotkey handling, the voice client, audio and resampling |
+| `extension/` | `npm test` | 93 unit tests — see [Testing](#testing) |
 | `extension/` | `npm run typecheck` | Type-checks the extension and the webview |
 | `extension/` | `npm run watch` | Rebuilds on save (reload the window to pick up changes) |
 | `extension/` | `npm run package` | Builds `echocode-0.1.4.vsix` with the microphone library for every platform |
