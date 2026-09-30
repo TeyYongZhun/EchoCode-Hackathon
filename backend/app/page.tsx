@@ -247,10 +247,13 @@ export default function Home() {
           <div className="wrap" data-reveal>
             <h2>The problem</h2>
             <p className="section-lede">
-              AI made developers faster, but asking a question still costs you your flow: stop, type a careful prompt,
-              paste in the code and the error, then work out which part of your screen the answer is talking about. It
-              is enough friction that people skip the question and paste in a fix they don&apos;t understand. We call it
-              vibe-coding fatigue. EchoCode makes asking as easy as turning to the person next to you.
+              Many students now &quot;vibe code&quot;: they tell an AI <em>&quot;please fix the code&quot;</em> or{" "}
+              <em>&quot;add this feature&quot;</em> and paste in whatever comes back, without understanding what was
+              wrong, why the fix works, or the logic behind the new code. Asking for a real explanation
+              takes more effort, because it means typing a long prompt, copy-pasting code into a chat window, and
+              matching the answer back to the right lines. So they skip the understanding and ship code they cannot
+              explain. EchoCode makes asking <em>why</em> as easy as turning to the person next to you, so understanding
+              the code takes less effort than copying it.
             </p>
           </div>
         </section>

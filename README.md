@@ -23,7 +23,7 @@ EchoCode is a VS Code extension that lets you ask about your code out loud and h
 
 ## The problem
 
-Many students now "vibe code": they tell an AI *"please fix the code"* and paste in whatever comes back, without knowing what was wrong or why the fix works. Asking for a real explanation takes more effort, because it means typing a long prompt, copy-pasting code into a chat window, and matching the answer back to the right lines. So they skip the understanding and ship code they cannot explain. EchoCode makes asking *why* as easy as talking, so understanding the code takes less effort than copying it.
+Many students now "vibe code": they tell an AI *"please fix the code"* or *"add this feature"* and paste in whatever comes back, without understanding what was wrong, why the fix works, or the logic behind the new code. Asking for a real explanation takes more effort, because it means typing a long prompt, copy-pasting code into a chat window, and matching the answer back to the right lines. So they skip the understanding and ship code they cannot explain. EchoCode makes asking *why* as easy as turning to the person next to you, so understanding the code takes less effort than copying it.
 
 ## The solution
 
