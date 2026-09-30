@@ -355,9 +355,9 @@ export default function Home() {
               ))}
             </div>
             <p className="pricing-footnote">
-              *Minutes count while a voice session is open, not only while someone is speaking; question counts are
-              estimates. Only Free is available today. Pro, Cohort and Campus are not on sale yet, and the items marked
-              planned are not built.
+              *Minutes count the audio of your questions and EchoCode&apos;s answers; question counts are estimates.
+              Only Free is available today. Pro, Cohort and Campus are not on sale yet, and the items marked planned
+              are not built.
             </p>
           </div>
         </section>

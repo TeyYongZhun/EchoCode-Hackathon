@@ -52,6 +52,6 @@ Nothing is recorded until you press the hotkey. Your question audio goes to Asse
 
 Free includes 10 minutes of voice a month, about 13 questions, and is available today. Pro ($20/month, or $192/year) adds 60 questions a month. Cohort ($25 per learner, once, for a 12-week cohort) and Campus ($36 per seat, per academic year) pool minutes across a bootcamp intake or a university department. Pro, Cohort and Campus are not on sale yet.
 
-Minutes count while a voice session is open, not only while you are speaking. The panel's ⚙ Settings shows how many are left.
+Minutes count the audio of your questions and EchoCode's answers; question counts are estimates. The panel's ⚙ Settings shows how many are left.
 
 Source and full documentation: https://github.com/TeyYongZhun/EchoCode-Hackathon
