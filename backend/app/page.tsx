@@ -42,7 +42,7 @@ const FEATURES = [
   },
   {
     title: 'It takes you to the file',
-    body: 'Say "open the globals.css file" and it comes up with your cursor in it, while EchoCode is still answering. Speech loses a letter more often than not, so "global.css" finds it too. A name that could mean two files opens neither and EchoCode asks which you meant: moving your cursor into the wrong file is worse than not moving it.',
+    body: 'Say "open the globals.css file" and it opens with your cursor in it. A slightly misheard name like "global.css" still finds it, and if two files could match, EchoCode asks which one you meant.',
   },
   {
     title: 'It points while it talks',
